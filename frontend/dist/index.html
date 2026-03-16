@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Vilva Taskspace</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script type="module" crossorigin src="/assets/main-CxoKqBs3.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/main-CFH2NeAm.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ── AUTH ──────────────────────────────────────────────────── -->
+  <div id="auth-view" class="auth-view hidden">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <svg width="30" height="30" viewBox="0 0 30 30" fill="none">
+          <rect width="30" height="30" rx="9" fill="#6366f1"/>
+          <path d="M8 15l5.5 5.5L22 9" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Vilva Taskspace
+      </div>
+      <div id="auth-form-slot"></div>
+    </div>
+  </div>
+
+  <!-- ── MAIN APP ───────────────────────────────────────────────── -->
+  <div id="main-view" class="main-view hidden">
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="logo-box">
+          <svg width="16" height="16" viewBox="0 0 30 30" fill="none">
+            <path d="M8 15l5.5 5.5L22 9" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        Vilva
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">Overview</div>
+        <a class="nav-link active" data-page="dashboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          Dashboard
+        </a>
+        <a class="nav-link" data-page="my-tasks">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+          My Tasks
+          <span class="nav-pill hidden" id="my-tasks-count">0</span>
+        </a>
+
+        <div class="sidebar-divider"></div>
+        <div class="nav-section-label">Work</div>
+
+        <a class="nav-link" data-page="projects">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+          Projects
+        </a>
+        <a class="nav-link" data-page="reports">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          Reports
+        </a>
+      </nav>
+
+      <!-- Active Timer Widget -->
+      <div id="sidebar-timer" class="sidebar-timer hidden">
+        <div class="sidebar-timer-label">Timer Running</div>
+        <div class="sidebar-timer-name" id="sidebar-timer-name">—</div>
+        <div class="sidebar-timer-clock" id="sidebar-timer-clock">00:00:00</div>
+        <button class="sidebar-timer-stop" id="sidebar-stop-btn">■ Stop Timer</button>
+      </div>
+
+      <!-- Footer -->
+      <div class="sidebar-footer">
+        <div class="sidebar-user" id="sidebar-user">
+          <img id="sidebar-avatar" src="" alt=""/>
+          <div class="sidebar-user-info">
+            <span class="sidebar-user-name" id="sidebar-name">Loading…</span>
+            <span class="sidebar-user-role" id="sidebar-role">Member</span>
+          </div>
+        </div>
+        <button class="sidebar-logout" id="logout-btn" title="Sign out">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <div class="main-content">
+      <!-- Topbar -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <span class="topbar-title" id="page-title">Dashboard</span>
+        </div>
+        <div class="topbar-right">
+          <div class="topbar-search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/></svg>
+            <input id="global-search" type="search" placeholder="Search tasks, projects…"/>
+          </div>
+          <button class="btn btn-primary btn-sm" id="create-task-btn">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" d="M12 4v16m8-8H4"/></svg>
+            New Task
+          </button>
+          <button class="topbar-btn" id="notif-btn" title="Notifications">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+            <span class="notif-dot hidden" id="notif-dot"></span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Page output -->
+      <div class="page-wrap" id="page-wrap"></div>
+    </div>
+  </div>
+
+  <!-- Notifications panel -->
+  <div class="notif-panel hidden" id="notif-panel">
+    <div class="notif-head">
+      <h3>Notifications</h3>
+      <button class="btn-link btn btn-sm" id="mark-all-read-btn">Mark all read</button>
+    </div>
+    <div class="notif-list-wrap" id="notif-list"></div>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-overlay hidden" id="modal-overlay">
+    <div class="modal-box" id="modal-box">
+      <div class="modal-head" id="modal-head"></div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-foot hidden" id="modal-foot"></div>
+    </div>
+  </div>
+
+  <!-- Toasts -->
+  <div class="toast-container" id="toast-container"></div>
+</div>
+
+</body>
+</html>

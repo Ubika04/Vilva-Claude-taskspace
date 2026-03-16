@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(composer create-project:*)",
+      "Bash(composer install:*)",
+      "Bash(curl -s http://127.0.0.1:8000/api/v1/register -X POST -H \"Content-Type: application/json\" -d '{\"\"\"\"name\"\"\"\":\"\"\"\"Admin User\"\"\"\",\"\"\"\"email\"\"\"\":\"\"\"\"admin@vilva.com\"\"\"\",\"\"\"\"password\"\"\"\":\"\"\"\"password123\"\"\"\",\"\"\"\"password_confirmation\"\"\"\":\"\"\"\"password123\"\"\"\"}')",
+      "Bash(python -m json.tool)",
+      "Bash(php artisan:*)",
+      "Bash(powershell.exe -Command \"Get-Content ''c:/Users/ubika/Downloads/ilva taskapce/backend/.env.example'' | Select-Object -Skip 30\")",
+      "Bash(powershell.exe -Command \"ls ''c:/Users/ubika/Downloads/ilva taskapce/laravel-app/app/Providers''\")",
+      "Bash(powershell.exe -Command \"Get-Content ''c:/Users/ubika/Downloads/ilva taskapce/frontend/src/api/apiClient.js''\")",
+      "Bash(powershell.exe -Command \"ls ''c:/Users/ubika/Downloads/ilva taskapce/laravel-app/database/migrations''\")",
+      "Bash(powershell.exe -Command \"Test-Path ''c:/Users/ubika/Downloads/ilva taskapce/laravel-app/vendor/laravel/framework/src/Illuminate/Foundation/Bus/DispatchesJobs.php''\")",
+      "Bash(powershell.exe -Command \"ls ''c:/Users/ubika/Downloads/ilva taskapce/laravel-app/database/seeders''\")",
+      "Bash(powershell.exe -Command \"Start-Process php -ArgumentList ''artisan'', ''serve'', ''--host=127.0.0.1'', ''--port=8000'' -WindowStyle Minimized\")",
+      "Bash(powershell.exe -Command \"Start-Sleep 3; Invoke-WebRequest -Uri ''http://localhost:8000/api/v1/login'' -Method POST -ContentType ''application/json'' -Body ''{\"\"email\"\":\"\"admin@vilva.com\"\",\"\"password\"\":\"\"password123\"\"}'' -UseBasicParsing\")"
+    ]
+  }
+}
