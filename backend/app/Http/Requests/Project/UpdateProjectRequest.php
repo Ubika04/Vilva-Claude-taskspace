@@ -19,6 +19,8 @@ class UpdateProjectRequest extends FormRequest
             'visibility'  => 'sometimes|string|in:private,team,public',
             'start_date'  => 'nullable|date',
             'due_date'    => 'nullable|date',
+            'ai_enabled'  => 'nullable|boolean',
+            'ai_context'  => 'nullable|string|max:2000',
         ];
     }
 }

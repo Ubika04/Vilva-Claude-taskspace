@@ -53,4 +53,58 @@ class DependencyController extends Controller
             'is_blocked' => $task->isBlocked(),
         ]);
     }
+
+    /**
+     * GET /api/v1/dependencies/all
+     * Returns all tasks that have dependencies (blocked or blocking).
+     */
+    public function all(): JsonResponse
+    {
+        $tasksWithDeps = Task::whereHas('blockedBy')
+            ->orWhereHas('blocking')
+            ->with([
+                'project:id,name,color',
+                'assignees:id,name,avatar',
+                'blockedBy' => fn ($q) => $q->select('tasks.id', 'tasks.title', 'tasks.status', 'tasks.priority')
+                    ->with('assignees:id,name,avatar'),
+                'blocking' => fn ($q) => $q->select('tasks.id', 'tasks.title', 'tasks.status', 'tasks.priority')
+                    ->with('assignees:id,name,avatar'),
+            ])
+            ->select('id', 'title', 'status', 'priority', 'due_date', 'project_id', 'task_type')
+            ->get();
+
+        $formatAssignees = fn ($task) => $task->assignees->map(fn ($a) => [
+            'id' => $a->id, 'name' => $a->name, 'avatar_url' => $a->avatar_url,
+        ]);
+
+        $formatDep = fn ($d) => [
+            'id' => $d->id, 'title' => $d->title, 'status' => $d->status,
+            'priority' => $d->priority,
+            'assignees' => $formatAssignees($d),
+        ];
+
+        $formatTask = fn ($t, $depKey, $depData) => [
+            'id'         => $t->id,
+            'title'      => $t->title,
+            'status'     => $t->status,
+            'priority'   => $t->priority,
+            'task_type'  => $t->task_type,
+            'due_date'   => $t->due_date?->toDateString(),
+            'project'    => $t->project ? ['id' => $t->project->id, 'name' => $t->project->name, 'color' => $t->project->color] : null,
+            'assignees'  => $formatAssignees($t),
+            'is_blocked' => $depKey === 'blocked_by' ? $t->blockedBy->where('status', '!=', 'completed')->isNotEmpty() : false,
+            $depKey      => $depData->map($formatDep),
+        ];
+
+        $blocked = $tasksWithDeps->filter(fn ($t) => $t->blockedBy->isNotEmpty())
+            ->map(fn ($t) => $formatTask($t, 'blocked_by', $t->blockedBy))->values();
+
+        $blocking = $tasksWithDeps->filter(fn ($t) => $t->blocking->isNotEmpty())
+            ->map(fn ($t) => $formatTask($t, 'blocking', $t->blocking))->values();
+
+        return response()->json([
+            'blocked'  => $blocked,
+            'blocking' => $blocking,
+        ]);
+    }
 }

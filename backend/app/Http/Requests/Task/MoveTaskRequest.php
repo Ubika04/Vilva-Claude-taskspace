@@ -11,7 +11,7 @@ class MoveTaskRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'status'   => 'required|string|in:backlog,todo,in_progress,review,completed',
+            'status'   => 'required|string|in:backlog,todo,in_progress,working_on,review,blocked,completed',
             'position' => 'nullable|integer|min:0',
         ];
     }

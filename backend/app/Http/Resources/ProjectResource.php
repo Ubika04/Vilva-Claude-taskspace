@@ -21,12 +21,14 @@ class ProjectResource extends JsonResource
             'start_date'  => $this->start_date?->toDateString(),
             'due_date'    => $this->due_date?->toDateString(),
             'progress'    => $this->progress,
+            'ai_enabled'  => (bool) $this->ai_enabled,
+            'ai_context'  => $this->ai_context,
             'owner'       => new UserResource($this->whenLoaded('owner')),
             'members'     => UserResource::collection($this->whenLoaded('members')),
             'tags'        => $this->whenLoaded('tags'),
             'tasks_count' => $this->tasks_count ?? null,
-            'created_at'  => $this->created_at->toIso8601String(),
-            'updated_at'  => $this->updated_at->toIso8601String(),
+            'created_at'  => $this->created_at?->toIso8601String(),
+            'updated_at'  => $this->updated_at?->toIso8601String(),
         ];
     }
 }

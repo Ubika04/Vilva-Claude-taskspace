@@ -12,17 +12,21 @@ class Task extends Model
 
     protected $fillable = [
         'project_id', 'parent_id', 'created_by', 'title', 'description',
-        'status', 'priority', 'due_date', 'start_date', 'position',
+        'status', 'priority', 'task_type', 'due_date', 'start_date',
+        'timebox_start', 'timebox_end', 'position',
         'estimated_minutes', 'total_time_spent', 'is_archived',
-        'completed_at', 'custom_fields',
+        'is_reviewed', 'score', 'completed_at', 'custom_fields',
     ];
 
     protected $casts = [
-        'due_date'      => 'date',
-        'start_date'    => 'date',
-        'completed_at'  => 'datetime',
-        'is_archived'   => 'boolean',
-        'custom_fields' => 'array',
+        'due_date'       => 'date',
+        'start_date'     => 'date',
+        'timebox_start'  => 'datetime',
+        'timebox_end'    => 'datetime',
+        'completed_at'   => 'datetime',
+        'is_archived'    => 'boolean',
+        'is_reviewed'    => 'boolean',
+        'custom_fields'  => 'array',
     ];
 
     // ─── Relationships ────────────────────────────────────────────────────────
@@ -106,6 +110,11 @@ class Task extends Model
     public function activityLogs()
     {
         return $this->morphMany(ActivityLog::class, 'subject');
+    }
+
+    public function schedules()
+    {
+        return $this->hasMany(TaskSchedule::class);
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────

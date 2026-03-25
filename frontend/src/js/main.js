@@ -10,7 +10,9 @@ import { initNotifications } from '@modules/notifications.js';
 import { initTimer } from '@modules/timer.js';
 import { initPomodoro, togglePomodoroPanel } from '@modules/pomodoro.js';
 import { initStatus } from '@modules/status.js';
+import { initWorkSession } from '@modules/worksession.js';
 import { showToast } from '@components/toast.js';
+import { getLayout, setLayout, renderShell } from '@modules/layouts.js';
 
 // ─── Boot ──────────────────────────────────────────────────────────────────
 
@@ -29,6 +31,7 @@ async function boot() {
       initTimer();
       initPomodoro();
       initStatus();
+      initWorkSession();
     } catch (err) {
       localStorage.removeItem('vilva_token');
       showAuthView();
@@ -46,7 +49,13 @@ function showAuthView() {
 
 function showMainView() {
   document.getElementById('auth-view').classList.add('hidden');
-  document.getElementById('main-view').classList.remove('hidden');
+  const mainView = document.getElementById('main-view');
+  mainView.classList.remove('hidden');
+
+  // Render the layout shell based on selected layout
+  const layout = getLayout();
+  renderShell(layout);
+  mainView.classList.add('layout-' + layout);
 
   const user = store.get('user');
   if (user) {
@@ -70,11 +79,11 @@ function showMainView() {
     router.navigate('/profile');
   });
 
-  // Navigation
-  document.querySelectorAll('.nav-link').forEach(item => {
+  // Navigation — works for all layout types
+  document.querySelectorAll('.nav-link, .tn-link, .mn-link').forEach(item => {
     item.addEventListener('click', (e) => {
       e.preventDefault();
-      document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
+      document.querySelectorAll('.nav-link, .tn-link, .mn-link').forEach(n => n.classList.remove('active'));
       item.classList.add('active');
       router.navigate('/' + item.dataset.page);
     });
@@ -88,6 +97,12 @@ function showMainView() {
     store.clear();
     showAuthView();
   });
+
+  // Theme picker
+  initThemePicker();
+
+  // Global search
+  initGlobalSearch();
 
   // Pomodoro toggle
   document.getElementById('pomodoro-btn')?.addEventListener('click', () => {
@@ -224,6 +239,161 @@ async function openAiTaskModal() {
     const { openNewTaskModal } = await import('@modules/tasks.js');
     openNewTaskModal(pageWrap, null, parsedTask);
   });
+}
+
+// ── Theme Picker ───────────────────────────────────────────────────────────
+
+const THEMES = ['', 'rose', 'emerald', 'sky', 'amber', 'slate', 'teal', 'pink', 'crimson'];
+
+function applyTheme(theme, mode) {
+  THEMES.forEach(t => { if (t) document.body.classList.remove('theme-' + t); });
+  document.body.classList.remove('dark');
+  if (theme) document.body.classList.add('theme-' + theme);
+  if (mode === 'dark') document.body.classList.add('dark');
+}
+
+function initThemePicker() {
+  const btn   = document.getElementById('theme-picker-btn');
+  const panel = document.getElementById('theme-panel');
+  if (!btn || !panel) return;
+
+  const savedTheme = localStorage.getItem('vilva_theme') || '';
+  const savedMode  = localStorage.getItem('vilva_mode')  || 'light';
+  applyTheme(savedTheme, savedMode);
+
+  const updateUI = (theme, mode) => {
+    panel.querySelectorAll('.theme-swatch').forEach(s =>
+      s.classList.toggle('active', s.dataset.theme === theme));
+    panel.querySelectorAll('.theme-mode-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.mode === mode));
+  };
+  updateUI(savedTheme, savedMode);
+
+  // Toggle panel
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    panel.classList.toggle('hidden');
+  });
+  document.addEventListener('click', e => {
+    if (!panel.contains(e.target) && e.target !== btn) panel.classList.add('hidden');
+  });
+
+  // Color swatch clicks
+  panel.querySelectorAll('.theme-swatch').forEach(swatch => {
+    swatch.addEventListener('click', () => {
+      const theme = swatch.dataset.theme;
+      const mode  = localStorage.getItem('vilva_mode') || 'light';
+      localStorage.setItem('vilva_theme', theme);
+      applyTheme(theme, mode);
+      updateUI(theme, mode);
+    });
+  });
+
+  // Mode buttons
+  panel.querySelectorAll('.theme-mode-btn').forEach(modeBtn => {
+    modeBtn.addEventListener('click', () => {
+      const mode  = modeBtn.dataset.mode;
+      const theme = localStorage.getItem('vilva_theme') || '';
+      localStorage.setItem('vilva_mode', mode);
+      applyTheme(theme, mode);
+      updateUI(theme, mode);
+    });
+  });
+
+  // Layout switch buttons — full reload to rebuild shell
+  panel.querySelectorAll('.layout-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const layout = btn.dataset.layout;
+      if (layout !== getLayout()) {
+        setLayout(layout); // saves + reloads page
+      }
+    });
+  });
+
+  // Mark active layout button
+  const currentLayout = getLayout();
+  panel.querySelectorAll('.layout-btn').forEach(b =>
+    b.classList.toggle('active', (b.dataset.layout || 'default') === currentLayout));
+}
+
+// ── Global Search ──────────────────────────────────────────────────────────
+
+function initGlobalSearch() {
+  const input     = document.getElementById('global-search');
+  const container = document.querySelector('.topbar-search');
+  if (!input || !container) return;
+
+  let timer = null;
+  let dropdown = null;
+
+  const closeDropdown = () => {
+    dropdown?.remove();
+    dropdown = null;
+  };
+
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (q.length < 2) { closeDropdown(); return; }
+
+    timer = setTimeout(async () => {
+      try {
+        const { api } = await import('@api/apiClient.js');
+        const res = await api.get('/search', { q });
+        showSearchResults(res, container, input);
+      } catch {}
+    }, 280);
+  });
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeDropdown(); input.blur(); }
+  });
+
+  document.addEventListener('mousedown', e => {
+    if (!container.contains(e.target)) closeDropdown();
+  });
+
+  function showSearchResults(res, container, input) {
+    closeDropdown();
+    const tasks    = res.tasks || [];
+    const projects = res.projects || [];
+    if (!tasks.length && !projects.length) return;
+
+    const statusColors = { backlog:'#94a3b8', todo:'#3b82f6', in_progress:'#f59e0b', review:'#8b5cf6', completed:'#10b981' };
+    const prioColors   = { urgent:'#dc2626', high:'#d97706', medium:'#2563eb', low:'#64748b' };
+
+    dropdown = document.createElement('div');
+    dropdown.className = 'search-dropdown';
+    dropdown.innerHTML = `
+      ${projects.length ? `
+        <div class="search-dd-group">Projects</div>
+        ${projects.map(p => `
+          <div class="search-dd-item" data-nav="/projects/${p.id}">
+            <span class="search-dd-dot" style="background:${p.color || '#6366f1'}"></span>
+            <span class="search-dd-name">${p.name}</span>
+          </div>`).join('')}` : ''}
+      ${tasks.length ? `
+        <div class="search-dd-group">Tasks</div>
+        ${tasks.map(t => `
+          <div class="search-dd-item" data-nav="/tasks/${t.id}">
+            <span class="search-dd-dot" style="background:${prioColors[t.priority] || '#94a3b8'}"></span>
+            <span class="search-dd-name">${t.title}</span>
+            ${t.project ? `<span class="search-dd-proj" style="color:${t.project.color}">${t.project.name}</span>` : ''}
+            <span class="search-dd-status" style="color:${statusColors[t.status] || '#94a3b8'}">${t.status?.replace('_',' ')}</span>
+          </div>`).join('')}` : ''}`;
+
+    container.style.position = 'relative';
+    container.appendChild(dropdown);
+
+    dropdown.querySelectorAll('[data-nav]').forEach(el => {
+      el.addEventListener('mousedown', e => {
+        e.preventDefault();
+        router.navigate(el.dataset.nav);
+        input.value = '';
+        closeDropdown();
+      });
+    });
+  }
 }
 
 boot();

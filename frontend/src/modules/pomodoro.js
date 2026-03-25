@@ -18,9 +18,9 @@ import { setStatus, STATUS_OPTIONS } from './status.js';
 // ── Config ──────────────────────────────────────────────────────────────────
 
 const DEFAULT_CONFIG = {
-  work:        50,   // minutes
-  shortBreak:  10,
-  longBreak:   20,
+  work:        50,   // minutes — Standard Pomodoro
+  shortBreak:  10,   // 10 min break after each session
+  longBreak:   20,   // 20 min break after 4 sessions
   longAfter:   4,    // sessions before long break
 };
 
@@ -114,6 +114,12 @@ function renderPanel() {
       </button>
     </div>
 
+    <!-- Presets -->
+    <div class="pom-presets">
+      <button class="pom-preset-btn ${config.work===50?'active':''}" data-preset="pomodoro" title="50 min work / 10 min break">🍅 Standard (50/10)</button>
+      <button class="pom-preset-btn ${config.work===25?'active':''}" data-preset="deep" title="25 min deep work / 5 min break">🧠 Deep Work (25/5)</button>
+    </div>
+
     <!-- Settings -->
     <details class="pom-settings">
       <summary>Settings</summary>
@@ -169,6 +175,32 @@ function bindPanelEvents(panel) {
   // Skip
   panel.querySelector('#pom-skip').addEventListener('click', () => {
     advancePhase();
+  });
+
+  // Presets
+  panel.querySelectorAll('.pom-preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (running) return;
+      const presets = {
+        pomodoro: { work: 50, shortBreak: 10, longBreak: 20 },  // Standard: 50 min work, 10 min break
+        deep:     { work: 25, shortBreak: 5,  longBreak: 15 },  // Deep Work: 25 min work, 5 min break
+      };
+      const p = presets[btn.dataset.preset];
+      if (!p) return;
+      config = { ...config, ...p };
+      saveConfig(config);
+      remaining = phaseSeconds(phase);
+      updateDisplay();
+      // Update input fields
+      const wEl = panel.querySelector('#pom-cfg-work');
+      const sEl = panel.querySelector('#pom-cfg-short');
+      const lEl = panel.querySelector('#pom-cfg-long');
+      if (wEl) wEl.value = p.work;
+      if (sEl) sEl.value = p.shortBreak;
+      if (lEl) lEl.value = p.longBreak;
+      panel.querySelectorAll('.pom-preset-btn').forEach(b => b.classList.toggle('active', b === btn));
+      showToast(`${btn.textContent.trim()} preset applied`, 'success');
+    });
   });
 
   // Save settings

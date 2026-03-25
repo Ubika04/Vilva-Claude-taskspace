@@ -1,0 +1,1 @@
+import{a as t}from"./main-CxzuflVX.js";const c=e=>t.get(`/projects/${e}/milestones`),a=(e,s)=>t.post(`/projects/${e}/milestones`,s),i=(e,s,o)=>t.patch(`/projects/${e}/milestones/${s}`,o),l=(e,s)=>t.delete(`/projects/${e}/milestones/${s}`);export{a as c,l as d,c as g,i as u};

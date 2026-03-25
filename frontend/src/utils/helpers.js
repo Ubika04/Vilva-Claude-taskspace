@@ -28,11 +28,13 @@ export function priorityBadge(priority) {
 
 export function statusPill(status) {
   const map = {
-    backlog:     { label: 'Backlog',     color: '#64748b', bg: '#f1f5f9' },
-    todo:        { label: 'To Do',       color: '#2563eb', bg: '#dbeafe' },
-    in_progress: { label: 'In Progress', color: '#d97706', bg: '#fef3c7' },
-    review:      { label: 'Review',      color: '#7c3aed', bg: '#ede9fe' },
-    completed:   { label: 'Completed',   color: '#16a34a', bg: '#dcfce7' },
+    backlog:     { label: 'Backlog',          color: '#64748b', bg: '#f1f5f9' },
+    todo:        { label: 'To Do',            color: '#2563eb', bg: '#dbeafe' },
+    in_progress: { label: 'In Progress',      color: '#d97706', bg: '#fef3c7' },
+    working_on:  { label: 'Working On',       color: '#ef4444', bg: '#fee2e2' },
+    review:      { label: 'Review / Testing', color: '#7c3aed', bg: '#ede9fe' },
+    blocked:     { label: 'Blocked',          color: '#b45309', bg: '#fef3c7' },
+    completed:   { label: 'Done',             color: '#16a34a', bg: '#dcfce7' },
   };
   const s = map[status] || map.backlog;
   return `<span class="status-pill" style="background:${s.bg};color:${s.color}">${s.label}</span>`;

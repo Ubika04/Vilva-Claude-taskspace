@@ -1,14 +1,21 @@
 import { getMyTasks, getProjectTasks, getTask, createTask, updateTask, deleteTask } from '@api/tasks.js';
-import { handleTimerAction } from './timer.js';
 import { openModal, closeModal } from '@components/modal.js';
 import { showToast } from '@components/toast.js';
 import { priorityBadge, statusPill, formatDate, isOverdue, relativeTime, avatarUrl } from '@utils/helpers.js';
+import { api } from '@api/apiClient.js';
+import { store } from '@store/store.js';
 
 // ── My Tasks Page ──────────────────────────────────────────────────────────────
 export async function renderMyTasks(container) {
   container.innerHTML = `<div class="spinner-wrap"><div class="spinner"></div></div>`;
-  const res = await getMyTasks();
-  const tasks = res.data || [];
+
+  // Load tasks + projects in parallel
+  const [taskRes, projRes] = await Promise.all([
+    getMyTasks(),
+    api.get('/projects').catch(() => ({ data: [] })),
+  ]);
+  const tasks = taskRes.data || [];
+  const projects = projRes.data || [];
 
   container.innerHTML = `
     <div class="page-header">
@@ -24,8 +31,10 @@ export async function renderMyTasks(container) {
         <option value="backlog">Backlog</option>
         <option value="todo">To Do</option>
         <option value="in_progress">In Progress</option>
-        <option value="review">Review</option>
-        <option value="completed">Completed</option>
+        <option value="working_on">Working On</option>
+        <option value="review">Review / Testing</option>
+        <option value="blocked">Blocked</option>
+        <option value="completed">Done</option>
       </select>
       <select id="mt-priority" class="form-input form-select" style="width:140px">
         <option value="">All Priority</option>
@@ -35,12 +44,105 @@ export async function renderMyTasks(container) {
         <option value="low">⚪ Low</option>
       </select>
     </div>
+
+    <!-- Asana-style inline add row -->
+    <div class="mt-add-row" id="mt-add-row">
+      <div class="mt-add-trigger" id="mt-add-trigger">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" d="M12 4v16m8-8H4"/></svg>
+        <span>Add task…</span>
+      </div>
+      <div class="mt-add-form hidden" id="mt-add-form">
+        <div class="mt-add-form-row">
+          <input type="text" id="mt-add-title" class="mt-add-input" placeholder="Task name" autofocus/>
+          <select id="mt-add-project" class="mt-add-select" title="Project">
+            ${projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+          </select>
+          <select id="mt-add-priority" class="mt-add-select" title="Priority">
+            <option value="medium">🔵 Medium</option>
+            <option value="low">⚪ Low</option>
+            <option value="high">🟠 High</option>
+            <option value="urgent">🔴 Urgent</option>
+          </select>
+          <select id="mt-add-status" class="mt-add-select" title="Status">
+            <option value="todo">To Do</option>
+            <option value="backlog">Backlog</option>
+            <option value="in_progress">In Progress</option>
+          </select>
+          <input type="date" id="mt-add-due" class="mt-add-select" title="Due date"/>
+          <select id="mt-add-type" class="mt-add-select" title="Type">
+            <option value="task">📋 Task</option>
+            <option value="feature">✨ Feature</option>
+            <option value="bug">🐛 Bug</option>
+            <option value="improvement">🔧 Improvement</option>
+          </select>
+          <button class="btn btn-primary btn-sm" id="mt-add-submit" style="white-space:nowrap">Add</button>
+          <button class="btn btn-ghost btn-sm" id="mt-add-cancel" style="padding:6px">✕</button>
+        </div>
+      </div>
+    </div>
+
     <div class="my-tasks-list" id="mt-list">
       ${tasks.length === 0
-        ? `<div class="full-empty"><div class="full-empty-icon">🎯</div><h3>No tasks assigned to you</h3><p>Tasks assigned to you will appear here</p></div>`
+        ? `<div class="full-empty"><div class="full-empty-icon">🎯</div><h3>No tasks assigned to you</h3><p>Click "+ Add task" above to create one</p></div>`
         : tasks.map(t => taskListItem(t)).join('')}
     </div>`;
 
+  // ── Inline add logic ───────────────────────────────────────────────────
+  const trigger = document.getElementById('mt-add-trigger');
+  const form    = document.getElementById('mt-add-form');
+  const titleIn = document.getElementById('mt-add-title');
+
+  trigger.addEventListener('click', () => {
+    trigger.classList.add('hidden');
+    form.classList.remove('hidden');
+    titleIn.focus();
+  });
+
+  document.getElementById('mt-add-cancel').addEventListener('click', () => {
+    form.classList.add('hidden');
+    trigger.classList.remove('hidden');
+    titleIn.value = '';
+  });
+
+  // Submit on Enter in title field
+  titleIn.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); document.getElementById('mt-add-submit').click(); }
+    if (e.key === 'Escape') { document.getElementById('mt-add-cancel').click(); }
+  });
+
+  document.getElementById('mt-add-submit').addEventListener('click', async () => {
+    const title = titleIn.value.trim();
+    if (!title) { titleIn.focus(); return; }
+
+    const projectId = document.getElementById('mt-add-project').value;
+    if (!projectId) { showToast('Select a project', 'error'); return; }
+
+    const btn = document.getElementById('mt-add-submit');
+    btn.disabled = true; btn.textContent = '…';
+
+    try {
+      const userId = store.get('user')?.id;
+      await createTask(projectId, {
+        title,
+        priority:  document.getElementById('mt-add-priority').value,
+        status:    document.getElementById('mt-add-status').value,
+        task_type: document.getElementById('mt-add-type').value,
+        due_date:  document.getElementById('mt-add-due').value || null,
+        assignees: userId ? [userId] : [],
+      });
+      showToast('Task added', 'success');
+      titleIn.value = '';
+      titleIn.focus();
+      // Reload
+      renderMyTasks(container);
+    } catch (err) {
+      showToast(err?.message || 'Failed to add task', 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Add';
+    }
+  });
+
+  // ── Filter logic ───────────────────────────────────────────────────────
   let filtered = [...tasks];
   const rerender = () => {
     const q = document.getElementById('mt-search').value.toLowerCase();
@@ -64,51 +166,30 @@ export async function renderMyTasks(container) {
 
   function bindListItems() {
     container.querySelectorAll('.task-list-item').forEach(el => {
-      el.addEventListener('click', e => {
-        if (e.target.closest('.task-timer-btn')) return;
+      el.addEventListener('click', () => {
         import('../js/router.js').then(m => m.router.navigate(`/tasks/${el.dataset.taskId}`));
-      });
-    });
-    container.querySelectorAll('.task-timer-btn').forEach(btn => {
-      btn.addEventListener('click', async e => {
-        e.stopPropagation();
-        const { store } = await import('@store/store.js');
-        if (store.get('activeTimer')) {
-          const { showToast } = await import('@components/toast.js');
-          showToast('Stop the current timer first', 'error');
-          return;
-        }
-        btn.disabled = true;
-        try {
-          await handleTimerAction(btn.dataset.timerTaskId, 'start');
-          btn.textContent = '⏹';
-          btn.title = 'Timer running';
-          btn.classList.add('running');
-        } catch {
-          btn.disabled = false;
-        }
       });
     });
   }
 }
 
 function taskListItem(t) {
-  const od      = isOverdue(t.due_date, t.status);
-  const canTime = t.status !== 'completed';
+  const od = isOverdue(t.due_date, t.status);
+  const isWorking = t.status === 'working_on';
   return `
-    <div class="task-list-item" data-task-id="${t.id}">
+    <div class="task-list-item ${isWorking ? 'working' : ''}" data-task-id="${t.id}">
       <div class="task-list-item-left">
         ${priorityBadge(t.priority)}
         <span class="task-list-item-title">${t.title}</span>
         ${t.project ? `<span class="task-list-item-project" style="background:${t.project.color}15;color:${t.project.color}">${t.project.name}</span>` : ''}
       </div>
       <div class="task-list-item-right">
+        ${isWorking ? `<span class="task-timer-auto-badge">⏱ Timer On</span>` : ''}
         ${statusPill(t.status)}
         ${t.due_date ? `<span class="task-due ${od ? 'overdue' : ''}">📅 ${formatDate(t.due_date)}</span>` : ''}
         <div style="display:flex">
           ${(t.assignees || []).slice(0,3).map(a => `<img src="${avatarUrl(a)}" class="av-xs" title="${a.name}" style="margin-left:-5px;border:1.5px solid #fff;object-fit:cover"/>`).join('')}
         </div>
-        ${canTime ? `<button class="task-timer-btn" data-timer-task-id="${t.id}" title="Start timer">▶</button>` : ''}
       </div>
     </div>`;
 }
@@ -129,6 +210,7 @@ export async function renderTaskList(container, projectId) {
             <option value="backlog">Backlog</option>
             <option value="todo">To Do</option>
             <option value="in_progress">In Progress</option>
+            <option value="working_on">Working On</option>
             <option value="review">Review</option>
             <option value="completed">Completed</option>
           </select>
@@ -148,22 +230,66 @@ export async function renderTaskList(container, projectId) {
       <table class="tasks">
         <thead>
           <tr>
-            <th style="width:38%">Title</th>
-            <th>Priority</th>
-            <th>Status</th>
+            <th style="width:32%" class="sortable-th" data-sort="title">Title ↕</th>
+            <th class="sortable-th" data-sort="task_type">Type ↕</th>
+            <th class="sortable-th" data-sort="priority">Priority ↕</th>
+            <th class="sortable-th" data-sort="status">Status ↕</th>
             <th>Assignees</th>
-            <th>Due Date</th>
+            <th class="sortable-th" data-sort="score">Score ↕</th>
+            <th class="sortable-th" data-sort="due_date">Due Date ↕</th>
             <th style="width:44px"></th>
           </tr>
         </thead>
         <tbody id="tasks-tbody">
           ${tasks.length === 0
-            ? `<tr><td colspan="6" class="table-empty">No tasks yet — add your first task above</td></tr>`
+            ? `<tr><td colspan="8" class="table-empty">No tasks yet — add your first task above</td></tr>`
             : tasks.map(t => taskTableRow(t)).join('')}
         </tbody>
       </table>
+      <!-- Asana-style compact inline add -->
+      <div class="inline-task-add" id="inline-add-row">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5"><path stroke-linecap="round" d="M12 4v16m8-8H4"/></svg>
+        <input type="text" id="inline-task-title" placeholder="Add a task… (press Enter)" autocomplete="off"/>
+        <select id="inline-task-type" title="Type">
+          <option value="task">📋 Task</option>
+          <option value="feature">✨ Feature</option>
+          <option value="bug">🐛 Bug</option>
+          <option value="improvement">🔧 Improvement</option>
+          <option value="story">📖 Story</option>
+          <option value="spike">🔬 Spike</option>
+          <option value="chore">🧹 Chore</option>
+        </select>
+        <select id="inline-task-priority" title="Priority">
+          <option value="medium">🔵</option>
+          <option value="low">🟢</option>
+          <option value="high">🟠</option>
+          <option value="urgent">🔴</option>
+        </select>
+      </div>
     </div>`;
 
+  // Inline add — compact Asana-style
+  const inlineInput = document.getElementById('inline-task-title');
+  inlineInput?.addEventListener('keydown', async e => {
+    if (e.key !== 'Enter') return;
+    const title = inlineInput.value.trim();
+    if (!title) return;
+    const taskType = document.getElementById('inline-task-type').value;
+    const priority = document.getElementById('inline-task-priority').value;
+    inlineInput.disabled = true;
+    try {
+      await createTask(projectId, { title, task_type: taskType, priority });
+      inlineInput.value = '';
+      showToast('Task added', 'success', 1500);
+      renderTaskList(container, projectId);
+    } catch {
+      showToast('Failed to add task', 'error');
+    }
+    inlineInput.disabled = false;
+    inlineInput.focus();
+  });
+
+  // Full form modal (via button)
   document.getElementById('add-task-btn')?.addEventListener('click', () => openNewTaskModal(container, projectId));
 
   const rerender = () => {
@@ -176,7 +302,7 @@ export async function renderTaskList(container, projectId) {
       (!p || t.priority === p)
     );
     document.getElementById('tasks-tbody').innerHTML = filtered.length === 0
-      ? `<tr><td colspan="6" class="table-empty">No matching tasks</td></tr>`
+      ? `<tr><td colspan="8" class="table-empty">No matching tasks</td></tr>`
       : filtered.map(t => taskTableRow(t)).join('');
     bindTableRows();
   };
@@ -190,7 +316,12 @@ export async function renderTaskList(container, projectId) {
     container.querySelectorAll('tr[data-task-id]').forEach(row => {
       row.addEventListener('click', e => {
         if (e.target.closest('[data-delete-task]')) return;
-        import('../js/router.js').then(m => m.router.navigate(`/tasks/${row.dataset.taskId}`));
+        // Shift+click opens side panel, normal click opens full detail
+        if (e.shiftKey) {
+          import('@components/sidePanel.js').then(m => m.openSidePanel(row.dataset.taskId));
+        } else {
+          import('../js/router.js').then(m => m.router.navigate(`/tasks/${row.dataset.taskId}`));
+        }
       });
     });
     container.querySelectorAll('[data-delete-task]').forEach(btn => {
@@ -205,16 +336,21 @@ export async function renderTaskList(container, projectId) {
   }
 }
 
+const TASK_TYPE_ICONS = { feature:'✨', bug:'🐛', improvement:'🔧', story:'📖', spike:'🔬', chore:'🧹', task:'📋' };
+
 function taskTableRow(t) {
   const od = isOverdue(t.due_date, t.status);
+  const typeIcon = TASK_TYPE_ICONS[t.task_type] || TASK_TYPE_ICONS.task;
   return `
     <tr data-task-id="${t.id}">
       <td>
         <div class="td-title">
           <span class="task-title-text">${t.title}</span>
           ${t.subtasks_count > 0 ? `<span style="font-size:11px;color:#94a3b8;margin-left:6px">⊞ ${t.subtasks_count}</span>` : ''}
+          ${t.is_reviewed ? `<span class="reviewed-badge">✓</span>` : ''}
         </div>
       </td>
+      <td><span class="task-type-icon" title="${t.task_type || 'task'}">${typeIcon}</span> <span style="font-size:12px;color:#64748b">${t.task_type||'task'}</span></td>
       <td>${priorityBadge(t.priority)}</td>
       <td>${statusPill(t.status)}</td>
       <td>
@@ -222,6 +358,7 @@ function taskTableRow(t) {
           ${(t.assignees || []).slice(0,3).map(a => `<img src="${avatarUrl(a)}" class="av-xs" title="${a.name}" style="border:1.5px solid #fff;object-fit:cover"/>`).join('')}
         </div>
       </td>
+      <td style="font-size:12px;font-weight:700;color:#6366f1;text-align:center">${t.score ? t.score+'pts' : '—'}</td>
       <td style="font-size:12.5px;color:${od?'#dc2626':'#64748b'};font-weight:${od?700:400};white-space:nowrap">
         ${t.due_date ? `📅 ${formatDate(t.due_date)}` : '—'}
       </td>
@@ -237,7 +374,18 @@ function taskTableRow(t) {
 export async function renderTaskDetail(taskId) {
   return async (container) => {
     container.innerHTML = `<div class="spinner-wrap"><div class="spinner"></div></div>`;
-    const task = await getTask(taskId);
+    let task;
+    try {
+      task = await getTask(taskId);
+    } catch (err) {
+      console.error('Failed to load task:', err);
+      container.innerHTML = `<div class="full-empty"><div class="full-empty-icon">⚠️</div><h3>Failed to load task</h3><p>${err.message || ''}</p></div>`;
+      return;
+    }
+    if (!task || !task.id) {
+      container.innerHTML = `<div class="full-empty"><div class="full-empty-icon">⚠️</div><h3>Task not found</h3></div>`;
+      return;
+    }
 
     container.innerHTML = `
       <div class="task-detail">
@@ -252,6 +400,7 @@ export async function renderTaskDetail(taskId) {
             </div>
             <div class="task-title-editable" id="task-title-edit" contenteditable="true">${task.title}</div>
             <div class="task-pills">
+              <span class="task-type-pill">${(TASK_TYPE_ICONS[task.task_type]||'📋')} ${(task.task_type||'task').replace('_',' ')}</span>
               ${priorityBadge(task.priority)}
               ${statusPill(task.status)}
               ${task.is_blocked ? `<span style="background:#fef3c7;color:#d97706;font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:100px">🔒 Blocked</span>` : ''}
@@ -338,23 +487,60 @@ export async function renderTaskDetail(taskId) {
         <!-- Sidebar -->
         <aside class="task-detail-sidebar">
 
-          <!-- Status / Priority quick-edit -->
+          <!-- Status / Priority / Type quick-edit -->
           <div class="ts-section">
             <span class="ts-label">Status</span>
-            <select class="form-input form-select form-select" id="ts-status" style="margin-bottom:12px">
+            <select class="form-input form-select" id="ts-status" style="margin-bottom:12px">
               <option value="backlog" ${task.status==='backlog'?'selected':''}>Backlog</option>
               <option value="todo" ${task.status==='todo'?'selected':''}>To Do</option>
               <option value="in_progress" ${task.status==='in_progress'?'selected':''}>In Progress</option>
-              <option value="review" ${task.status==='review'?'selected':''}>Review</option>
-              <option value="completed" ${task.status==='completed'?'selected':''}>Completed</option>
+              <option value="working_on" ${task.status==='working_on'?'selected':''}>🔥 Working On</option>
+              <option value="review" ${task.status==='review'?'selected':''}>Review / Testing</option>
+              <option value="blocked" ${task.status==='blocked'?'selected':''}>🚫 Blocked</option>
+              <option value="completed" ${task.status==='completed'?'selected':''}>Done</option>
             </select>
             <span class="ts-label">Priority</span>
-            <select class="form-input form-select" id="ts-priority">
+            <select class="form-input form-select" id="ts-priority" style="margin-bottom:12px">
               <option value="low" ${task.priority==='low'?'selected':''}>🟢 Low</option>
               <option value="medium" ${task.priority==='medium'?'selected':''}>🔵 Medium</option>
               <option value="high" ${task.priority==='high'?'selected':''}>🟠 High</option>
               <option value="urgent" ${task.priority==='urgent'?'selected':''}>🔴 Urgent</option>
             </select>
+            <span class="ts-label">Task Type</span>
+            <select class="form-input form-select" id="ts-task-type" style="margin-bottom:12px">
+              <option value="task" ${task.task_type==='task'?'selected':''}>📋 Task</option>
+              <option value="feature" ${task.task_type==='feature'?'selected':''}>✨ Feature</option>
+              <option value="bug" ${task.task_type==='bug'?'selected':''}>🐛 Bug</option>
+              <option value="improvement" ${task.task_type==='improvement'?'selected':''}>🔧 Improvement</option>
+              <option value="story" ${task.task_type==='story'?'selected':''}>📖 Story</option>
+              <option value="spike" ${task.task_type==='spike'?'selected':''}>🔬 Spike</option>
+              <option value="chore" ${task.task_type==='chore'?'selected':''}>🧹 Chore</option>
+            </select>
+          </div>
+
+          <!-- Reviewed + Score -->
+          <div class="ts-section">
+            <div class="ts-reviewed-row">
+              <span class="ts-label" style="margin-bottom:0">Reviewed</span>
+              <label class="toggle-switch">
+                <input type="checkbox" id="ts-reviewed" ${task.is_reviewed ? 'checked' : ''}/>
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
+            </div>
+            <span class="ts-label" style="margin-top:12px">Score</span>
+            <div style="display:flex;align-items:center;gap:8px">
+              <input type="range" id="ts-score" min="0" max="100" value="${task.score || 0}" class="score-slider"/>
+              <span id="ts-score-val" class="score-val">${task.score || 0}</span>
+            </div>
+          </div>
+
+          <!-- Timebox -->
+          <div class="ts-section">
+            <span class="ts-label">Timebox</span>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <input type="datetime-local" id="ts-timebox-start" class="form-input" value="${task.timebox_start ? task.timebox_start.slice(0,16) : ''}" placeholder="Start"/>
+              <input type="datetime-local" id="ts-timebox-end" class="form-input" value="${task.timebox_end ? task.timebox_end.slice(0,16) : ''}" placeholder="End"/>
+            </div>
           </div>
 
           <!-- Assignees -->
@@ -368,6 +554,34 @@ export async function renderTaskDetail(taskId) {
                 </div>`).join('')}
               ${task.assignees?.length === 0 ? `<span style="font-size:13px;color:#94a3b8">Unassigned</span>` : ''}
             </div>
+          </div>
+
+          <!-- Reviewers -->
+          <div class="ts-section">
+            <span class="ts-label">Reviewers</span>
+            <div id="ts-reviewers-list">
+              ${(task.reviewers || []).map(r => {
+                const rvStatus = r.pivot?.review_status || 'pending';
+                const rvNote   = r.pivot?.review_note || '';
+                return `
+                <div class="ts-reviewer-chip">
+                  <img src="${avatarUrl(r)}" alt="${r.name}"/>
+                  <span>${r.name}</span>
+                  <span class="rv-status ${rvStatus}" title="${rvNote}">${rvStatus === 'approved' ? '✅ Approved' : rvStatus === 'rejected' ? '❌ Rejected' : '⏳ Pending'}</span>
+                  <button class="rv-remove" data-reviewer-id="${r.id}" title="Remove reviewer">×</button>
+                </div>`;
+              }).join('')}
+              ${(task.reviewers || []).length === 0 ? `<span style="font-size:13px;color:#94a3b8">No reviewers</span>` : ''}
+            </div>
+            <button class="btn btn-ghost btn-sm" id="add-reviewer-btn" style="width:100%;justify-content:center;margin-top:6px">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" d="M12 4v16m8-8H4"/></svg>
+              Add Reviewer
+            </button>
+            ${(() => { const u = typeof store !== 'undefined' ? store?.get?.('user') : null; const myRv = u && (task.reviewers || []).find(r => r.id === u.id); return myRv?.pivot?.review_status === 'pending' ? `
+            <div class="rv-actions">
+              <button class="btn btn-primary btn-sm" id="rv-approve-btn">✅ Approve</button>
+              <button class="btn btn-ghost btn-sm" style="color:var(--red)" id="rv-reject-btn">❌ Reject</button>
+            </div>` : ''; })()}
           </div>
 
           <!-- Dates -->
@@ -403,42 +617,103 @@ export async function renderTaskDetail(taskId) {
           </div>
 
           <!-- Dependencies -->
-          ${(task.blocked_by || []).length > 0 ? `
           <div class="ts-section">
-            <span class="ts-label">Blocked By</span>
-            ${task.blocked_by.map(d => `
-              <div class="ts-dep-chip ${d.status !== 'completed' ? 'blocked' : ''}">
-                ${d.status === 'completed' ? '✓' : '⚠'} ${d.title}
-              </div>`).join('')}
-          </div>` : ''}
+            <span class="ts-label">Dependencies</span>
+            <div id="dep-blocked-by">
+              ${(task.blocked_by || []).length > 0 ? `
+                <div style="font-size:11px;font-weight:700;color:#d97706;margin-bottom:4px">BLOCKED BY</div>
+                ${task.blocked_by.map(d => `
+                  <div class="ts-dep-chip ${d.status !== 'completed' ? 'blocked' : 'resolved'}">
+                    <span>${d.status === 'completed' ? '✅' : '🔒'} ${d.title}</span>
+                    <button class="dep-remove-btn" data-dep-task-id="${task.id}" data-dep-on-id="${d.id}" title="Remove">×</button>
+                  </div>`).join('')}` : ''}
+            </div>
+            <div id="dep-blocking">
+              ${(task.blocking || []).length > 0 ? `
+                <div style="font-size:11px;font-weight:700;color:#6366f1;margin-bottom:4px;margin-top:8px">BLOCKING</div>
+                ${task.blocking.map(d => `
+                  <div class="ts-dep-chip blocking">
+                    <span>➡ ${d.title}</span>
+                  </div>`).join('')}` : ''}
+            </div>
+            <div style="margin-top:8px">
+              <button class="btn btn-ghost btn-sm" id="add-dep-btn" style="width:100%;justify-content:center">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" d="M12 4v16m8-8H4"/></svg>
+                Add Dependency
+              </button>
+            </div>
+          </div>
 
         </aside>
+      </div>
+      <!-- Activity Log -->
+      <div class="section-card activity-log-card" id="activity-log-section">
+        <div class="section-head">
+          <span class="section-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Activity
+          </span>
+        </div>
+        <div id="activity-list" class="activity-list">
+          <div style="color:#94a3b8;font-size:13px">Loading activity…</div>
+        </div>
       </div>`;
 
     bindTaskDetailEvents(container, task);
+    loadActivityLog(task.id);
   };
 }
 
+async function loadActivityLog(taskId) {
+  const el = document.getElementById('activity-list');
+  if (!el) return;
+  try {
+    const { api } = await import('@api/apiClient.js');
+    const res  = await api.get(`/tasks/${taskId}/activity`);
+    const logs = res.data || [];
+    if (!logs.length) {
+      el.innerHTML = `<div style="color:#94a3b8;font-size:13px">No activity yet</div>`;
+      return;
+    }
+    el.innerHTML = logs.map(log => `
+      <div class="activity-item">
+        <img src="${log.user?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(log.user?.name||'?')}&size=24&background=6366f1&color=fff`}" class="av-xs activity-av" alt="${log.user?.name||''}"/>
+        <div class="activity-body">
+          <span class="activity-user">${log.user?.name || 'System'}</span>
+          <span class="activity-event">${formatActivityEvent(log)}</span>
+          <span class="activity-time">${relativeTime(log.created_at)}</span>
+        </div>
+      </div>`).join('');
+  } catch {
+    el.innerHTML = `<div style="color:#94a3b8;font-size:13px">No activity recorded</div>`;
+  }
+}
+
+function formatActivityEvent(log) {
+  const p = log.properties || {};
+  switch (log.event) {
+    case 'created':   return 'created this task';
+    case 'updated': {
+      const changes = Object.keys(p.changes || p || {}).filter(k => k !== 'updated_at');
+      return changes.length ? `updated ${changes.join(', ')}` : 'updated this task';
+    }
+    case 'status_changed': return `moved to <strong>${(p.to || '').replace('_',' ')}</strong>`;
+    case 'assigned':       return `assigned to ${p.assignee || 'someone'}`;
+    case 'commented':      return 'left a comment';
+    case 'timer_started':  return 'started the timer';
+    case 'timer_stopped':  return `stopped the timer (${p.duration || ''})`;
+    default:               return log.event?.replace(/_/g, ' ') || 'did something';
+  }
+}
+
 function renderTimerControls(task) {
-  const a = task.active_timer;
-  if (!a) {
-    return `<button class="btn btn-success btn-sm timer-action-btn" data-action="start" data-task-id="${task.id}">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-      Start Timer
-    </button>`;
+  if (task.status === 'working_on') {
+    return `<span class="timer-auto-badge">⏱ Timer running automatically</span>`;
   }
-  if (a.status === 'active') {
-    return `
-      <span class="timer-live-badge">● LIVE</span>
-      <button class="btn btn-secondary btn-sm timer-action-btn" data-action="pause" data-task-id="${task.id}">⏸ Pause</button>
-      <button class="btn btn-danger btn-sm timer-action-btn" data-action="stop" data-task-id="${task.id}">■ Stop</button>`;
+  if (task.active_timer?.status === 'active') {
+    return `<span class="timer-auto-badge">⏱ Timer active</span>`;
   }
-  if (a.status === 'paused') {
-    return `
-      <button class="btn btn-success btn-sm timer-action-btn" data-action="resume" data-task-id="${task.id}">▶ Resume</button>
-      <button class="btn btn-danger btn-sm timer-action-btn" data-action="stop" data-task-id="${task.id}">■ Stop</button>`;
-  }
-  return '';
+  return `<span style="font-size:12px;color:var(--muted)">Set status to "Working On" to start timer</span>`;
 }
 
 function commentHtml(c) {
@@ -494,6 +769,37 @@ function bindTaskDetailEvents(container, task) {
     showToast('Priority updated', 'success');
   });
 
+  // Task type change
+  document.getElementById('ts-task-type')?.addEventListener('change', async e => {
+    await updateTask(task.id, { task_type: e.target.value });
+    showToast('Task type updated', 'success');
+  });
+
+  // Reviewed toggle
+  document.getElementById('ts-reviewed')?.addEventListener('change', async e => {
+    await updateTask(task.id, { is_reviewed: e.target.checked });
+    showToast(e.target.checked ? 'Marked as reviewed' : 'Unmarked review', 'success');
+  });
+
+  // Score slider
+  const scoreSlider = document.getElementById('ts-score');
+  const scoreVal    = document.getElementById('ts-score-val');
+  scoreSlider?.addEventListener('input', () => { scoreVal.textContent = scoreSlider.value; });
+  scoreSlider?.addEventListener('change', async () => {
+    await updateTask(task.id, { score: parseInt(scoreSlider.value) || null });
+    showToast('Score updated', 'success');
+  });
+
+  // Timebox
+  document.getElementById('ts-timebox-start')?.addEventListener('change', async e => {
+    await updateTask(task.id, { timebox_start: e.target.value || null });
+    showToast('Timebox start set', 'success');
+  });
+  document.getElementById('ts-timebox-end')?.addEventListener('change', async e => {
+    await updateTask(task.id, { timebox_end: e.target.value || null });
+    showToast('Timebox end set', 'success');
+  });
+
   // Due date change
   document.getElementById('ts-due-date')?.addEventListener('change', async e => {
     await updateTask(task.id, { due_date: e.target.value || null });
@@ -521,14 +827,6 @@ function bindTaskDetailEvents(container, task) {
     }
   });
 
-  // Timer actions
-  container.querySelectorAll('.timer-action-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const ok = await handleTimerAction(btn.dataset.taskId, btn.dataset.action);
-      if (ok) renderTaskDetail(task.id)(container);
-    });
-  });
-
   // Post comment
   document.getElementById('post-comment-btn')?.addEventListener('click', async () => {
     const { postComment } = await import('@api/tasks.js');
@@ -538,7 +836,7 @@ function bindTaskDetailEvents(container, task) {
     await postComment(task.id, { body });
     input.value = '';
     showToast('Comment posted', 'success');
-    renderTaskDetail(task.id)(container);
+    (await renderTaskDetail(task.id))(container);
   });
 
   // Subtask checkbox
@@ -548,15 +846,20 @@ function bindTaskDetailEvents(container, task) {
     });
   });
 
-  // Add subtask
+  // Add subtask (task_type required — inherit from parent)
   document.getElementById('add-subtask-btn')?.addEventListener('click', async () => {
     const inp = document.getElementById('subtask-input');
     const title = inp.value.trim();
     if (!title) return;
-    await createTask(task.project_id, { title, parent_id: task.id, status: 'todo' });
+    await createTask(task.project_id, {
+      title,
+      parent_id: task.id,
+      task_type: task.task_type || 'task',
+      status: 'todo',
+    });
     inp.value = '';
     showToast('Subtask added', 'success');
-    renderTaskDetail(task.id)(container);
+    (await renderTaskDetail(task.id))(container);
   });
 
   // Breadcrumb nav
@@ -569,6 +872,83 @@ function bindTaskDetailEvents(container, task) {
     });
   });
 
+  // Add subtask — require task_type
+  document.getElementById('add-subtask-btn')?.removeEventListener('click', () => {});
+  // (Subtask handler already bound above — will add task_type fix in the handler)
+
+  // ── Dependency management ─────────────────────────────────
+  // Remove dependency
+  container.querySelectorAll('.dep-remove-btn').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      if (!confirm('Remove this dependency?')) return;
+      try {
+        await api.delete(`/tasks/${btn.dataset.depTaskId}/dependencies/${btn.dataset.depOnId}`);
+        showToast('Dependency removed', 'success');
+        (await renderTaskDetail(task.id))(container);
+      } catch { showToast('Failed to remove dependency', 'error'); }
+    });
+  });
+
+  // Add dependency modal
+  document.getElementById('add-dep-btn')?.addEventListener('click', async () => {
+    const { openModal: openDepModal, closeModal: closeDepModal } = await import('@components/modal.js');
+    // Load project tasks for picker
+    let projectTasks = [];
+    try {
+      const res = await api.get(`/projects/${task.project_id}/tasks`, { per_page: 100 });
+      projectTasks = (res.data || []).filter(t => t.id !== task.id);
+    } catch {}
+
+    openDepModal({
+      title: 'Add Dependency',
+      subtitle: `What does "${task.title}" depend on?`,
+      body: `
+        <form id="dep-form">
+          <div class="form-group">
+            <label class="form-label">This task is blocked by:</label>
+            <select name="depends_on_id" class="form-input form-select" required id="dep-task-select">
+              <option value="">— Select a task —</option>
+              ${projectTasks.map(t => `<option value="${t.id}">${t.title} (${t.status})</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Dependency Type</label>
+            <select name="type" class="form-input form-select">
+              <option value="finish_to_start">Finish to Start (most common)</option>
+              <option value="start_to_start">Start to Start</option>
+              <option value="finish_to_finish">Finish to Finish</option>
+              <option value="start_to_finish">Start to Finish</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px;padding-top:12px;border-top:1px solid #e2e8f0">
+            <button type="button" class="btn btn-ghost" id="dep-cancel">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="dep-submit">Add Dependency</button>
+          </div>
+        </form>`,
+    });
+
+    document.getElementById('dep-cancel').addEventListener('click', closeDepModal);
+    document.getElementById('dep-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = document.getElementById('dep-submit');
+      btn.disabled = true; btn.textContent = 'Adding…';
+      const fd = Object.fromEntries(new FormData(e.target));
+      if (!fd.depends_on_id) { showToast('Select a task', 'error'); btn.disabled = false; btn.textContent = 'Add Dependency'; return; }
+      try {
+        await api.post(`/tasks/${task.id}/dependencies`, {
+          depends_on_id: parseInt(fd.depends_on_id),
+          type: fd.type,
+        });
+        closeDepModal();
+        showToast('Dependency added', 'success');
+        (await renderTaskDetail(task.id))(container);
+      } catch (err) {
+        btn.disabled = false; btn.textContent = 'Add Dependency';
+      }
+    });
+  });
+
   // File upload
   document.getElementById('file-upload')?.addEventListener('change', async e => {
     const { uploadAttachment } = await import('@api/tasks.js');
@@ -577,7 +957,7 @@ function bindTaskDetailEvents(container, task) {
     const fd = new FormData(); fd.append('file', file);
     await uploadAttachment(task.id, fd);
     showToast('File uploaded', 'success');
-    renderTaskDetail(task.id)(container);
+    (await renderTaskDetail(task.id))(container);
   });
 
   // Download attachment
@@ -588,6 +968,87 @@ function bindTaskDetailEvents(container, task) {
       const { url } = await downloadAttachment(link.dataset.id);
       window.open(url, '_blank');
     });
+  });
+
+  // ── Reviewer management ─────────────────────────────────────
+  // Remove reviewer
+  container.querySelectorAll('.rv-remove').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const reviewerId = btn.dataset.reviewerId;
+      if (!confirm('Remove this reviewer?')) return;
+      try {
+        await api.delete(`/tasks/${task.id}/reviewers/${reviewerId}`);
+        showToast('Reviewer removed', 'success');
+        (await renderTaskDetail(task.id))(container);
+      } catch { showToast('Failed to remove reviewer', 'error'); }
+    });
+  });
+
+  // Add reviewer
+  document.getElementById('add-reviewer-btn')?.addEventListener('click', async () => {
+    const { openModal: openRvModal, closeModal: closeRvModal } = await import('@components/modal.js');
+    let users = [];
+    try {
+      const res = await api.get('/users/search?per_page=50');
+      users = Array.isArray(res) ? res : (res.data || []);
+    } catch {}
+    // Exclude existing reviewers
+    const existingIds = (task.reviewers || []).map(r => r.id);
+    users = users.filter(u => !existingIds.includes(u.id));
+
+    openRvModal({
+      title: 'Add Reviewers',
+      body: `
+        <div class="form-group">
+          <label class="form-label">Select reviewers:</label>
+          <div style="max-height:250px;overflow-y:auto;display:flex;flex-direction:column;gap:4px" id="rv-user-list">
+            ${users.map(u => `
+              <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;cursor:pointer;font-size:13px" class="rv-user-opt">
+                <input type="checkbox" value="${u.id}"/>
+                <img src="${u.avatar_url}" style="width:24px;height:24px;border-radius:50%;object-fit:cover"/>
+                ${u.name}
+              </label>`).join('')}
+            ${users.length === 0 ? '<span style="color:#94a3b8;font-size:13px">No available users</span>' : ''}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;padding-top:12px;border-top:1px solid #e2e8f0">
+          <button class="btn btn-ghost" id="rv-cancel">Cancel</button>
+          <button class="btn btn-primary" id="rv-submit">Add Reviewers</button>
+        </div>`,
+    });
+
+    document.getElementById('rv-cancel')?.addEventListener('click', closeRvModal);
+    document.getElementById('rv-submit')?.addEventListener('click', async () => {
+      const ids = [...document.querySelectorAll('#rv-user-list input:checked')].map(cb => parseInt(cb.value));
+      if (!ids.length) { showToast('Select at least one reviewer', 'error'); return; }
+      try {
+        await api.post(`/tasks/${task.id}/reviewers`, { reviewer_ids: ids });
+        closeRvModal();
+        showToast('Reviewers added', 'success');
+        (await renderTaskDetail(task.id))(container);
+      } catch { showToast('Failed to add reviewers', 'error'); }
+    });
+  });
+
+  // Approve / Reject review
+  document.getElementById('rv-approve-btn')?.addEventListener('click', async () => {
+    const note = prompt('Approval note (optional):') || '';
+    try {
+      await api.post(`/tasks/${task.id}/review`, { status: 'approved', note });
+      showToast('Review approved', 'success');
+      (await renderTaskDetail(task.id))(container);
+    } catch { showToast('Failed to submit review', 'error'); }
+  });
+
+  document.getElementById('rv-reject-btn')?.addEventListener('click', async () => {
+    const note = prompt('Reason for rejection:');
+    if (note === null) return;
+    try {
+      await api.post(`/tasks/${task.id}/review`, { status: 'rejected', note });
+      showToast('Review rejected', 'success');
+      (await renderTaskDetail(task.id))(container);
+    } catch { showToast('Failed to submit review', 'error'); }
   });
 }
 
@@ -616,8 +1077,8 @@ export async function openNewTaskModal(container, projectId = null, prefill = nu
   const selPriority = (v) => ['low','medium','high','urgent'].map(p =>
     `<option value="${p}"${(pf.priority||'medium')===p?' selected':''}>${{low:'🟢 Low',medium:'🔵 Medium',high:'🟠 High',urgent:'🔴 Urgent'}[p]}</option>`
   ).join('');
-  const selStatus = (v) => ['backlog','todo','in_progress','review'].map(s =>
-    `<option value="${s}"${(pf.status||'todo')===s?' selected':''}>${{backlog:'Backlog',todo:'To Do',in_progress:'In Progress',review:'Review'}[s]}</option>`
+  const selStatus = (v) => ['backlog','todo','in_progress','working_on','review'].map(s =>
+    `<option value="${s}"${(pf.status||'todo')===s?' selected':''}>${{backlog:'Backlog',todo:'To Do',in_progress:'In Progress',working_on:'Working On',review:'Review'}[s]}</option>`
   ).join('');
 
   openModal({
@@ -642,6 +1103,18 @@ export async function openNewTaskModal(container, projectId = null, prefill = nu
 
         <div class="form-row">
           <div class="form-group">
+            <label class="form-label">Type *</label>
+            <select name="task_type" class="form-input form-select" required>
+              <option value="task" ${(pf.task_type||'task')==='task'?'selected':''}>📋 Task</option>
+              <option value="feature" ${pf.task_type==='feature'?'selected':''}>✨ Feature</option>
+              <option value="bug" ${pf.task_type==='bug'?'selected':''}>🐛 Bug</option>
+              <option value="improvement" ${pf.task_type==='improvement'?'selected':''}>🔧 Improvement</option>
+              <option value="story" ${pf.task_type==='story'?'selected':''}>📖 Story</option>
+              <option value="spike" ${pf.task_type==='spike'?'selected':''}>🔬 Spike</option>
+              <option value="chore" ${pf.task_type==='chore'?'selected':''}>🧹 Chore</option>
+            </select>
+          </div>
+          <div class="form-group">
             <label class="form-label">Priority</label>
             <select name="priority" class="form-input form-select">${selPriority()}</select>
           </div>
@@ -661,6 +1134,39 @@ export async function openNewTaskModal(container, projectId = null, prefill = nu
             <input type="number" name="estimated_minutes" class="form-input" placeholder="e.g. 60" min="1" value="${pf.estimated_minutes||''}"/>
           </div>
         </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Score (Story Points)</label>
+            <select name="score" class="form-input form-select">
+              <option value="">—</option>
+              <option value="1">1 pt</option>
+              <option value="2">2 pts</option>
+              <option value="3">3 pts</option>
+              <option value="5">5 pts</option>
+              <option value="8">8 pts</option>
+              <option value="13">13 pts</option>
+              <option value="21">21 pts</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Start Date</label>
+            <input type="date" name="start_date" class="form-input" value="${pf.start_date||''}"/>
+          </div>
+        </div>
+
+        <div class="form-sep">Timeboxing</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Timebox Start</label>
+            <input type="datetime-local" name="timebox_start" class="form-input" id="tb-start"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Timebox End</label>
+            <input type="datetime-local" name="timebox_end" class="form-input" id="tb-end"/>
+          </div>
+        </div>
+        <div id="timebox-conflict" class="hidden" style="font-size:12px;color:#dc2626;font-weight:600;padding:6px 10px;background:#fef2f2;border-radius:6px;margin-top:4px"></div>
 
         <div class="form-sep">Assignment</div>
 
@@ -714,6 +1220,29 @@ export async function openNewTaskModal(container, projectId = null, prefill = nu
   initPicker('assignee-search', 'assignee-dropdown', 'assignee-chips', 'assignee-ids', assigneeIds, 'user');
   initPicker('watcher-search',  'watcher-dropdown',  'watcher-chips',  'watcher-ids',  watcherIds,  'user');
   initPicker('tag-search',      'tag-dropdown',      'tag-chips',      'tag-ids',      tagIds,      'tag');
+
+  // Timebox overlap validation
+  const tbStart = document.getElementById('tb-start');
+  const tbEnd   = document.getElementById('tb-end');
+  const tbConflict = document.getElementById('timebox-conflict');
+  if (tbStart && tbEnd && tbConflict) {
+    const checkOverlap = async () => {
+      if (!tbStart.value || !tbEnd.value) { tbConflict.classList.add('hidden'); return; }
+      try {
+        const res = await api.post('/timebox/validate', {
+          timebox_start: tbStart.value, timebox_end: tbEnd.value,
+        });
+        if (res.has_conflicts) {
+          tbConflict.innerHTML = '⚠ ' + res.conflicts.map(c => c.message).join('<br>⚠ ');
+          tbConflict.classList.remove('hidden');
+        } else {
+          tbConflict.classList.add('hidden');
+        }
+      } catch { tbConflict.classList.add('hidden'); }
+    };
+    tbStart.addEventListener('change', checkOverlap);
+    tbEnd.addEventListener('change', checkOverlap);
+  }
 
   document.getElementById('cancel-task').addEventListener('click', closeModal);
 

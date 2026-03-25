@@ -4,15 +4,21 @@
  */
 
 const routes = {
-  '/dashboard':  () => import('@modules/dashboard.js').then(m => m.renderDashboard),
-  '/projects':   () => import('@modules/projects.js').then(m => m.renderProjects),
-  '/my-tasks':   () => import('@modules/tasks.js').then(m => m.renderMyTasks),
-  '/kanban':     () => import('@modules/kanban.js').then(m => m.renderKanban),
-  '/reports':    () => import('@modules/reports.js').then(m => m.renderReports),
-  '/milestones': () => import('@modules/milestones.js').then(m => m.renderMilestones),
-  '/goals':      () => import('@modules/goals.js').then(m => m.renderGoals),
-  '/profile':    () => import('@modules/profile.js').then(m => m.renderProfile),
-  '/admin':      () => import('@modules/admin.js').then(m => m.renderAdmin),
+  '/dashboard':      () => import('@modules/dashboard.js').then(m => m.renderDashboard),
+  '/projects':       () => import('@modules/projects.js').then(m => m.renderProjects),
+  '/my-tasks':       () => import('@modules/tasks.js').then(m => m.renderMyTasks),
+  '/kanban':         () => import('@modules/kanban.js').then(m => m.renderKanban),
+  '/reports':        () => import('@modules/reports.js').then(m => m.renderReports),
+  '/milestones':     () => import('@modules/milestones.js').then(m => m.renderMilestones),
+  '/goals':          () => import('@modules/goals.js').then(m => m.renderGoals),
+  '/dependencies':   () => import('@modules/dependencies.js').then(m => m.renderDependencies),
+  '/calendar':       () => import('@modules/calendar.js').then(m => m.renderCalendar),
+  '/profile':        () => import('@modules/profile.js').then(m => m.renderProfile),
+  '/admin':          () => import('@modules/admin.js').then(m => m.renderAdmin),
+  '/chat':           () => import('@modules/chat.js').then(m => m.renderChat),
+  '/work-sessions':  () => import('@modules/worksession.js').then(m => m.renderWorkSessions),
+  '/meetings':       () => import('@modules/meetings.js').then(m => m.renderMeetings),
+  '/schedule':       () => import('@modules/schedule.js').then(m => m.renderMySchedule),
 };
 
 class Router {
@@ -34,7 +40,7 @@ class Router {
     if (! handler) {
       const match = path.match(/^\/projects\/(\d+)\/kanban$/);
       if (match) {
-        handler = () => import('@modules/kanban.js').then(m => () => m.renderKanban(match[1]));
+        handler = () => import('@modules/kanban.js').then(m => m.renderKanban(match[1]));
       }
       const projectMatch = path.match(/^\/projects\/(\d+)$/);
       if (projectMatch) {
@@ -45,7 +51,7 @@ class Router {
       }
       const taskMatch = path.match(/^\/tasks\/(\d+)$/);
       if (taskMatch) {
-        handler = () => import('@modules/tasks.js').then(m => () => m.renderTaskDetail(taskMatch[1]));
+        handler = () => import('@modules/tasks.js').then(m => m.renderTaskDetail(taskMatch[1]));
       }
     }
 
@@ -69,14 +75,20 @@ class Router {
 
       // Update page title
       const titles = {
-        '/dashboard':  'Dashboard',
-        '/projects':   'Projects',
-        '/my-tasks':   'My Tasks',
-        '/reports':    'Reports',
-        '/milestones': 'Milestones',
-        '/goals':      'Goals',
-        '/profile':    'Profile Settings',
-        '/admin':      'Team Members',
+        '/dashboard':      'Dashboard',
+        '/projects':       'Projects',
+        '/my-tasks':       'My Tasks',
+        '/reports':        'Reports',
+        '/milestones':     'Milestones',
+        '/goals':          'Goals',
+        '/dependencies':   'Dependencies',
+        '/calendar':       'Calendar',
+        '/profile':        'Profile Settings',
+        '/admin':          'User Management',
+        '/chat':           'Chat',
+        '/work-sessions':  'Work Sessions',
+        '/meetings':       'Meetings',
+        '/schedule':       'My Schedule',
       };
       if (pageTitle) pageTitle.textContent = titles[path] || 'Vilva Taskspace';
 

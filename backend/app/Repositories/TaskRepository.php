@@ -15,18 +15,41 @@ class TaskRepository extends BaseRepository
 
     public function getForProject(int $projectId, array $filters = []): LengthAwarePaginator
     {
-        return Task::query()
+        $query = Task::query()
             ->where('project_id', $projectId)
             ->whereNull('parent_id')
-            ->when(isset($filters['status']),   fn($q) => $q->where('status', $filters['status']))
-            ->when(isset($filters['priority']), fn($q) => $q->where('priority', $filters['priority']))
-            ->when(isset($filters['assignee']), fn($q) => $q->whereHas('assignees', fn($a) => $a->where('users.id', $filters['assignee'])))
-            ->when(isset($filters['search']),   fn($q) => $q->where('title', 'like', "%{$filters['search']}%"))
-            ->when(isset($filters['tag']),      fn($q) => $q->whereHas('tags', fn($t) => $t->where('tags.id', $filters['tag'])))
+            ->when(isset($filters['status']),    fn($q) => $q->where('status', $filters['status']))
+            ->when(isset($filters['priority']),  fn($q) => $q->where('priority', $filters['priority']))
+            ->when(isset($filters['assignee']),  fn($q) => $q->whereHas('assignees', fn($a) => $a->where('users.id', $filters['assignee'])))
+            ->when(isset($filters['search']),    fn($q) => $q->where('title', 'like', "%{$filters['search']}%"))
+            ->when(isset($filters['tag']),       fn($q) => $q->whereHas('tags', fn($t) => $t->where('tags.id', $filters['tag'])))
+            ->when(isset($filters['task_type']), fn($q) => $q->where('task_type', $filters['task_type']))
             ->with(['assignees:id,name,avatar', 'tags', 'subtasks'])
-            ->withCount('subtasks')
-            ->orderBy('position')
-            ->paginate($filters['per_page'] ?? 25);
+            ->withCount('subtasks');
+
+        // Sorting support for list view
+        $sortBy  = $filters['sort_by'] ?? 'position';
+        $sortDir = $filters['sort_dir'] ?? 'asc';
+
+        $allowedSorts = [
+            'title', 'status', 'priority', 'due_date', 'score',
+            'created_at', 'total_time_spent', 'position', 'task_type',
+        ];
+
+        if (in_array($sortBy, $allowedSorts)) {
+            // Custom ordering for priority and status
+            if ($sortBy === 'priority') {
+                $query->orderByRaw("FIELD(priority, 'urgent','high','medium','low') " . ($sortDir === 'desc' ? 'DESC' : 'ASC'));
+            } elseif ($sortBy === 'status') {
+                $query->orderByRaw("FIELD(status, 'backlog','todo','in_progress','working_on','review','completed') " . ($sortDir === 'desc' ? 'DESC' : 'ASC'));
+            } else {
+                $query->orderBy($sortBy, $sortDir);
+            }
+        } else {
+            $query->orderBy('position');
+        }
+
+        return $query->paginate($filters['per_page'] ?? 25);
     }
 
     public function getKanbanBoard(int $projectId): Collection
@@ -34,7 +57,7 @@ class TaskRepository extends BaseRepository
         return Task::query()
             ->where('project_id', $projectId)
             ->whereNull('parent_id')
-            ->with(['assignees:id,name,avatar', 'tags', 'timeLogs' => fn($q) => $q->where('status', 'active')])
+            ->with(['assignees:id,name,avatar', 'tags', 'blockedBy:id,title,status', 'timeLogs' => fn($q) => $q->where('status', 'active')])
             ->withCount('subtasks')
             ->orderBy('status')
             ->orderBy('position')
@@ -78,7 +101,7 @@ class TaskRepository extends BaseRepository
             'blockedBy:id,title,status',
             'blocking:id,title,status',
             'timeLogs' => fn($q) => $q->where('status', 'active'),
-        ])->findOrFail($taskId);
+        ])->withCount('subtasks')->findOrFail($taskId);
     }
 
     public function reorderInColumn(int $projectId, string $status, array $orderedIds): void

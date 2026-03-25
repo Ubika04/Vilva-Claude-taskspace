@@ -13,7 +13,12 @@
       "Bash(powershell.exe -Command \"Test-Path ''c:/Users/ubika/Downloads/ilva taskapce/laravel-app/vendor/laravel/framework/src/Illuminate/Foundation/Bus/DispatchesJobs.php''\")",
       "Bash(powershell.exe -Command \"ls ''c:/Users/ubika/Downloads/ilva taskapce/laravel-app/database/seeders''\")",
       "Bash(powershell.exe -Command \"Start-Process php -ArgumentList ''artisan'', ''serve'', ''--host=127.0.0.1'', ''--port=8000'' -WindowStyle Minimized\")",
-      "Bash(powershell.exe -Command \"Start-Sleep 3; Invoke-WebRequest -Uri ''http://localhost:8000/api/v1/login'' -Method POST -ContentType ''application/json'' -Body ''{\"\"email\"\":\"\"admin@vilva.com\"\",\"\"password\"\":\"\"password123\"\"}'' -UseBasicParsing\")"
+      "Bash(powershell.exe -Command \"Start-Sleep 3; Invoke-WebRequest -Uri ''http://localhost:8000/api/v1/login'' -Method POST -ContentType ''application/json'' -Body ''{\"\"email\"\":\"\"admin@vilva.com\"\",\"\"password\"\":\"\"password123\"\"}'' -UseBasicParsing\")",
+      "Read(//c/Users/ubika/Downloads/ilva/ taskapce/frontend/src/modules/**)",
+      "Read(//c/Users/ubika/Downloads/ilva/ taskapce/backend/database/seeders/**)",
+      "Bash(xargs grep:*)",
+      "Bash(grep -n \"protected $appends\\\\|protected $hidden\\\\|appends\\\\|getIsBlocked\" \"c:\\\\Users\\\\ubika\\\\Downloads\\\\ilva taskapce\\\\backend\\\\app\\\\Models\\\\Task.php\")",
+      "Bash(find 'c:\\\\Users\\\\ubika\\\\Downloads\\\\ilva taskapce\\\\backend\\\\app\\\\Models' -name *Role* -o -name *Permission*)"
     ]
   }
 }

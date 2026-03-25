@@ -18,6 +18,10 @@ class StoreProjectRequest extends FormRequest
             'visibility'  => 'nullable|string|in:private,team,public',
             'start_date'  => 'nullable|date',
             'due_date'    => 'nullable|date|after_or_equal:start_date',
+            'ai_enabled'  => 'nullable|boolean',
+            'ai_context'  => 'nullable|string|max:2000',
+            'member_ids'   => 'nullable|array',
+            'member_ids.*' => 'integer|exists:users,id',
         ];
     }
 }

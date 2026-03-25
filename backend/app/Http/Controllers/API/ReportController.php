@@ -16,13 +16,15 @@ class ReportController extends Controller
     public function userProductivity(Request $request): JsonResponse
     {
         $request->validate([
-            'user_id' => 'required|integer|exists:users,id',
+            'user_id' => 'nullable|integer|exists:users,id',
             'from'    => 'required|date',
             'to'      => 'required|date|after_or_equal:from',
         ]);
 
+        $userId = $request->user_id ?? $request->user()->id;
+
         return response()->json(
-            $this->reportService->userProductivity($request->user_id, $request->from, $request->to)
+            $this->reportService->userProductivity($userId, $request->from, $request->to)
         );
     }
 
@@ -41,6 +43,22 @@ class ReportController extends Controller
         ]);
 
         return response()->json($this->reportService->timeTracking($request->all()));
+    }
+
+    /**
+     * Velocity report — score points completed per week, per member.
+     */
+    public function velocity(Request $request): JsonResponse
+    {
+        $request->validate([
+            'project_id' => 'required|integer|exists:projects,id',
+            'from'       => 'required|date',
+            'to'         => 'required|date|after_or_equal:from',
+        ]);
+
+        return response()->json(
+            $this->reportService->velocity($request->project_id, $request->from, $request->to)
+        );
     }
 
     public function exportCsv(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse

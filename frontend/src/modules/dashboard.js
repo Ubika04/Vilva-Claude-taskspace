@@ -2,6 +2,7 @@ import { api } from '@api/apiClient.js';
 import { formatDuration, formatDate, priorityBadge, statusPill, isOverdue } from '@utils/helpers.js';
 import { showToast } from '@components/toast.js';
 import { store } from '@store/store.js';
+import { getUiTheme, themeDashboard } from './ui-themes.js';
 
 export async function renderDashboard(container) {
   container.innerHTML = `<div class="spinner-wrap"><div class="spinner"></div></div>`;
@@ -9,6 +10,15 @@ export async function renderDashboard(container) {
   try { data = await api.get('/dashboard'); }
   catch {
     container.innerHTML = `<div class="full-empty"><div class="full-empty-icon">⚠️</div><h3>Could not load dashboard</h3><p>Check that the server is running on port 8000</p></div>`;
+    return;
+  }
+
+  // Check if current UI theme has its own dashboard
+  const uiTheme = getUiTheme();
+  const themedHtml = themeDashboard(data, uiTheme);
+  if (themedHtml) {
+    container.innerHTML = themedHtml;
+    bindDashEvents(container);
     return;
   }
 
@@ -111,31 +121,12 @@ export async function renderDashboard(container) {
     </div>
   `;
 
-  // Timer buttons — start timer without navigating
-  container.querySelectorAll('.dash-timer-btn').forEach(btn => {
-    btn.addEventListener('click', async e => {
-      e.stopPropagation();
-      const taskId = btn.dataset.timerTaskId;
-      const activeTimer = store.get('activeTimer');
-      if (activeTimer) {
-        showToast('Stop the current timer first', 'error');
-        return;
-      }
-      btn.disabled = true;
-      try {
-        const { handleTimerAction } = await import('./timer.js');
-        await handleTimerAction(taskId, 'start');
-        btn.textContent = '⏹';
-        btn.title = 'Timer running';
-        btn.classList.add('running');
-      } catch {
-        btn.disabled = false;
-      }
-    });
-  });
+  bindDashEvents(container);
+}
 
+function bindDashEvents(container) {
   // Row click → navigate to task detail
-  container.querySelectorAll('.dash-task-row[data-task-id]').forEach(el => {
+  container.querySelectorAll('.dash-task-row[data-task-id], .task-list-item[data-task-id]').forEach(el => {
     el.addEventListener('click', () => {
       import('../js/router.js').then(m => m.router.navigate(`/tasks/${el.dataset.taskId}`));
     });
@@ -145,20 +136,48 @@ export async function renderDashboard(container) {
       import('../js/router.js').then(m => m.router.navigate(`/tasks/${el.dataset.taskId}`));
     });
   });
+  container.querySelectorAll('.project-card[data-id]').forEach(el => {
+    el.addEventListener('click', () => {
+      import('../js/router.js').then(m => m.router.navigate(`/projects/${el.dataset.id}`));
+    });
+  });
+
+  // Timer buttons — start/stop without navigating
+  container.querySelectorAll('.dash-timer-btn').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const taskId    = btn.dataset.timerTaskId;
+      if (!taskId || taskId === 'undefined') return;
+      const taskTitle = btn.closest('[data-task-title]')?.dataset.taskTitle
+                     || btn.closest('.dash-task-row')?.querySelector('.dash-task-name')?.textContent
+                     || null;
+      const isRunning = btn.classList.contains('running');
+      btn.disabled = true;
+      try {
+        const { handleTimerAction } = await import('./timer.js');
+        const action = isRunning ? 'stop' : 'start';
+        await handleTimerAction(taskId, action, taskTitle);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
 
   document.getElementById('dash-view-all-tasks')?.addEventListener('click', e => {
-
     e.preventDefault();
     import('../js/router.js').then(m => m.router.navigate('/my-tasks'));
   });
 
   document.getElementById('dash-stop-timer')?.addEventListener('click', async function() {
+    const taskId = this.dataset.taskId;
+    this.disabled = true;
     try {
-      const { stopTimer } = await import('@api/timer.js');
-      await stopTimer(this.dataset.taskId);
-      showToast('Timer stopped', 'success');
+      const { handleTimerAction } = await import('./timer.js');
+      await handleTimerAction(taskId, 'stop');
       renderDashboard(container);
-    } catch {}
+    } catch {
+      this.disabled = false;
+    }
   });
 }
 
@@ -186,7 +205,7 @@ function taskRow(t) {
         ${t.project ? `<span class="dash-task-project" style="background:${t.project.color}18;color:${t.project.color}">${t.project.name}</span>` : ''}
         ${t.due_date ? `<span class="dash-task-due ${od ? 'is-overdue' : ''}">📅 ${formatDate(t.due_date)}</span>` : ''}
         ${priorityBadge(t.priority)}
-        ${canTime ? `<button class="dash-timer-btn" data-timer-task-id="${t.id}" title="Start timer">▶</button>` : ''}
+        ${canTime && t.id ? `<button class="dash-timer-btn" data-timer-task-id="${t.id}" title="Start timer">▶</button>` : ''}
       </div>
     </div>`;
 }

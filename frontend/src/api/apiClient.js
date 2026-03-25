@@ -39,9 +39,15 @@ class ApiClient {
     const response = await fetch(url, config);
 
     if (response.status === 401) {
-      localStorage.removeItem('vilva_token');
-      location.reload();
-      return;
+      // Don't auto-reload for auth-related endpoints — let the caller handle it
+      const isAuthEndpoint = ['/me', '/login', '/register'].some(p => endpoint.endsWith(p));
+      if (!isAuthEndpoint) {
+        localStorage.removeItem('vilva_token');
+        location.reload();
+        return;
+      }
+      const body401 = await response.json().catch(() => ({ message: 'Unauthenticated' }));
+      throw new Error(body401.message || 'Unauthenticated');
     }
 
     if (response.status === 204 || response.headers.get('content-length') === '0') {

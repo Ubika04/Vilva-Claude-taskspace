@@ -8,6 +8,16 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/src/assets/css/styles.css"/>
+  <script>
+    // Apply color theme early to prevent flash
+    (function(){
+      localStorage.removeItem('vilva_ui_theme'); // cleanup old
+      var t = localStorage.getItem('vilva_theme') || '';
+      var m = localStorage.getItem('vilva_mode') || '';
+      if (t) document.documentElement.className += ' theme-' + t;
+      if (m === 'dark') document.documentElement.className += ' dark';
+    })();
+  </script>
 </head>
 <body>
 <div id="app">
@@ -26,122 +36,8 @@
     </div>
   </div>
 
-  <!-- ── MAIN APP ───────────────────────────────────────────────── -->
-  <div id="main-view" class="main-view hidden">
-
-    <!-- Sidebar -->
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar-brand">
-        <div class="logo-box">
-          <svg width="16" height="16" viewBox="0 0 30 30" fill="none">
-            <path d="M8 15l5.5 5.5L22 9" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        Vilva
-      </div>
-
-      <nav class="sidebar-nav">
-        <div class="nav-section-label">Overview</div>
-        <a class="nav-link active" data-page="dashboard">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
-          Dashboard
-        </a>
-        <a class="nav-link" data-page="my-tasks">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
-          My Tasks
-          <span class="nav-pill hidden" id="my-tasks-count">0</span>
-        </a>
-
-        <div class="sidebar-divider"></div>
-        <div class="nav-section-label">Work</div>
-
-        <a class="nav-link" data-page="projects">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
-          Projects
-        </a>
-        <a class="nav-link" data-page="milestones">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/></svg>
-          Milestones
-        </a>
-        <a class="nav-link" data-page="goals">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-          Goals
-        </a>
-        <a class="nav-link" data-page="reports">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-          Reports
-        </a>
-
-        <!-- Admin only -->
-        <a class="nav-link hidden" data-page="admin" id="nav-admin">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-          Team Members
-        </a>
-      </nav>
-
-      <!-- Active Timer Widget -->
-      <div id="sidebar-timer" class="sidebar-timer hidden">
-        <div class="sidebar-timer-label">Timer Running</div>
-        <div class="sidebar-timer-name" id="sidebar-timer-name">—</div>
-        <div class="sidebar-timer-clock" id="sidebar-timer-clock">00:00:00</div>
-        <button class="sidebar-timer-stop" id="sidebar-stop-btn">■ Stop Timer</button>
-      </div>
-
-      <!-- Footer -->
-      <div class="sidebar-footer">
-        <div class="sidebar-user" id="sidebar-user" title="View profile" style="cursor:pointer">
-          <img id="sidebar-avatar" src="" alt=""/>
-          <div class="sidebar-user-info">
-            <span class="sidebar-user-name" id="sidebar-name">Loading…</span>
-            <span class="sidebar-user-role" id="sidebar-role">Member</span>
-          </div>
-        </div>
-        <button class="sidebar-logout" id="logout-btn" title="Sign out">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-        </button>
-      </div>
-    </aside>
-
-    <!-- Main -->
-    <div class="main-content">
-      <!-- Topbar -->
-      <header class="topbar">
-        <div class="topbar-left">
-          <span class="topbar-title" id="page-title">Dashboard</span>
-        </div>
-        <div class="topbar-right">
-          <div class="topbar-search">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/></svg>
-            <input id="global-search" type="search" placeholder="Search tasks, projects…"/>
-          </div>
-
-          <!-- Pomodoro button + live countdown -->
-          <button class="topbar-btn pom-topbar-btn" id="pomodoro-btn" title="Pomodoro Timer">
-            <span>🍅</span>
-            <span class="pom-topbar-clock hidden" id="pom-topbar-clock">50:00</span>
-          </button>
-
-          <!-- AI Task button -->
-          <button class="btn btn-ghost btn-sm ai-task-btn" id="ai-task-btn" title="Create task with AI">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
-            ✨ AI Task
-          </button>
-
-          <button class="btn btn-primary btn-sm" id="create-task-btn">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" d="M12 4v16m8-8H4"/></svg>
-            New Task
-          </button>
-          <button class="topbar-btn" id="notif-btn" title="Notifications">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-            <span class="notif-dot hidden" id="notif-dot"></span>
-          </button>
-        </div>
-      </header>
-
-      <!-- Page output -->
-      <div class="page-wrap" id="page-wrap"></div>
-    </div>
-  </div>
+  <!-- ── MAIN APP — Shell rendered by layouts.js ─────────────────── -->
+  <div id="main-view" class="main-view hidden"></div>
 
   <!-- Notifications panel -->
   <div class="notif-panel hidden" id="notif-panel">
@@ -158,6 +54,14 @@
       <div class="modal-head" id="modal-head"></div>
       <div class="modal-body" id="modal-body"></div>
       <div class="modal-foot hidden" id="modal-foot"></div>
+    </div>
+  </div>
+
+  <!-- Task Side Panel -->
+  <div class="side-panel-overlay hidden" id="side-panel-overlay">
+    <div class="side-panel" id="side-panel">
+      <div class="side-panel-header" id="side-panel-header"></div>
+      <div class="side-panel-body" id="side-panel-body"></div>
     </div>
   </div>
 

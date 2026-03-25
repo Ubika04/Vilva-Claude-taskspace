@@ -1,15 +1,16 @@
 import { getKanbanBoard, moveTask, createTask } from '@api/tasks.js';
 import { showToast } from '@components/toast.js';
 import { priorityBadge, formatDate, isOverdue, avatarUrl } from '@utils/helpers.js';
-import { store } from '@store/store.js';
 import Sortable from 'sortablejs';
 
 const COLS = [
-  { key:'backlog',     label:'Backlog',      color:'#94a3b8' },
-  { key:'todo',        label:'To Do',        color:'#3b82f6' },
-  { key:'in_progress', label:'In Progress',  color:'#f59e0b' },
-  { key:'review',      label:'Review',       color:'#8b5cf6' },
-  { key:'completed',   label:'Completed',    color:'#10b981' },
+  { key:'backlog',     label:'Backlog',          color:'#94a3b8' },
+  { key:'todo',        label:'To Do',            color:'#3b82f6' },
+  { key:'in_progress', label:'In Progress',      color:'#f59e0b' },
+  { key:'working_on',  label:'Working On',       color:'#ef4444' },
+  { key:'review',      label:'Review / Testing', color:'#8b5cf6' },
+  { key:'blocked',     label:'Blocked',          color:'#d97706' },
+  { key:'completed',   label:'Done',             color:'#10b981' },
 ];
 
 export async function renderKanban(projectId) {
@@ -44,7 +45,6 @@ export async function renderKanban(projectId) {
 
     initDragDrop(container, projectId);
     bindAddTask(container, projectId, board);
-    bindTimerButtons(container);
   };
 }
 
@@ -66,26 +66,27 @@ function renderColumn(col, tasks) {
     </div>`;
 }
 
+const TYPE_ICONS = { feature:'✨', bug:'🐛', improvement:'🔧', story:'📖', spike:'🔬', chore:'🧹', task:'📋' };
+
 function kbCard(t) {
   const od      = isOverdue(t.due_date, t.status);
-  const canTime = t.status !== 'completed';
+  const typeIcon = TYPE_ICONS[t.task_type] || TYPE_ICONS.task;
+  const isWorking = t.status === 'working_on';
   return `
-    <div class="kb-card ${od?'overdue':''} ${t.is_blocked?'blocked':''} ${t.active_timer?'timing':''}" data-task-id="${t.id}">
+    <div class="kb-card ${od?'overdue':''} ${t.is_blocked?'blocked':''} ${isWorking?'timing':''}" data-task-id="${t.id}">
       ${(t.tags||[]).length > 0 ? `<div class="kb-card-tags">${t.tags.map(tag => `<span style="padding:1px 6px;border-radius:3px;font-size:10.5px;font-weight:700;background:${tag.color}20;color:${tag.color}">${tag.name}</span>`).join('')}</div>` : ''}
       <div class="kb-card-title-row">
-        <div class="kb-card-title">${t.title}</div>
-        ${canTime ? `<button class="kb-timer-btn ${t.active_timer ? 'running' : ''}" data-timer-task-id="${t.id}" title="${t.active_timer ? 'Timer running' : 'Start timer'}">
-          ${t.active_timer
-            ? `<svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`
-            : `<svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>`}
-        </button>` : ''}
+        <div class="kb-card-title"><span class="kb-type-icon" title="${t.task_type||'task'}">${typeIcon}</span> ${t.title}</div>
+        ${isWorking ? `<span class="kb-timing-indicator" title="Timer running (auto)">⏱</span>` : ''}
       </div>
       ${t.is_blocked ? `<div style="font-size:11px;color:#d97706;font-weight:600;margin-bottom:6px">🔒 Blocked</div>` : ''}
       <div class="kb-card-footer">
         <div class="kb-card-footer-l">
           ${priorityBadge(t.priority)}
           ${t.subtasks_count > 0 ? `<span style="font-size:11px;color:#94a3b8">⊞ ${t.subtasks_count}</span>` : ''}
-          ${t.active_timer ? `<span class="kb-timing-badge">⏱ live</span>` : ''}
+          ${isWorking ? `<span class="kb-timing-badge">⏱ live</span>` : ''}
+          ${t.is_reviewed ? `<span class="kb-reviewed-badge">✓ Reviewed</span>` : ''}
+          ${t.score ? `<span class="kb-score-badge">${t.score}pts</span>` : ''}
         </div>
         <div class="kb-card-footer-r">
           ${t.due_date ? `<span class="kb-card-due ${od?'overdue':''}">📅 ${formatDate(t.due_date)}</span>` : ''}
@@ -151,42 +152,11 @@ function bindAddTask(container, projectId, board) {
   container.querySelectorAll('.kb-card').forEach(card => {
     card.addEventListener('click', e => {
       if (e.target.closest('.kb-timer-btn')) return;
-      import('../js/router.js').then(m => m.router.navigate(`/tasks/${card.dataset.taskId}`));
-    });
-  });
-}
-
-function bindTimerButtons(container) {
-  container.querySelectorAll('.kb-timer-btn').forEach(btn => {
-    btn.addEventListener('click', async e => {
-      e.stopPropagation();
-      const taskId = btn.dataset.timerTaskId;
-      const isRunning = btn.classList.contains('running');
-
-      if (!isRunning && store.get('activeTimer')) {
-        showToast('Stop the current timer first', 'error');
-        return;
-      }
-
-      btn.disabled = true;
-      try {
-        const { handleTimerAction } = await import('./timer.js');
-        if (isRunning) {
-          await handleTimerAction(taskId, 'stop');
-          btn.classList.remove('running');
-          btn.innerHTML = `<svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
-          btn.title = 'Start timer';
-          btn.closest('.kb-card')?.classList.remove('timing');
-        } else {
-          await handleTimerAction(taskId, 'start');
-          btn.classList.add('running');
-          btn.innerHTML = `<svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
-          btn.title = 'Timer running';
-          btn.closest('.kb-card')?.classList.add('timing');
-        }
-        btn.disabled = false;
-      } catch {
-        btn.disabled = false;
+      // Shift+click opens side panel, normal click opens full detail
+      if (e.shiftKey) {
+        import('@components/sidePanel.js').then(m => m.openSidePanel(card.dataset.taskId));
+      } else {
+        import('../js/router.js').then(m => m.router.navigate(`/tasks/${card.dataset.taskId}`));
       }
     });
   });
@@ -204,6 +174,18 @@ function openQuickAddModal(container, projectId, status, board) {
           </div>
           <div class="form-row">
             <div class="form-group">
+              <label class="form-label">Type *</label>
+              <select name="task_type" class="form-input form-select" required>
+                <option value="task">📋 Task</option>
+                <option value="feature">✨ Feature</option>
+                <option value="bug">🐛 Bug</option>
+                <option value="improvement">🔧 Improvement</option>
+                <option value="story">📖 Story</option>
+                <option value="spike">🔬 Spike</option>
+                <option value="chore">🧹 Chore</option>
+              </select>
+            </div>
+            <div class="form-group">
               <label class="form-label">Priority</label>
               <select name="priority" class="form-input form-select">
                 <option value="low">🟢 Low</option>
@@ -212,9 +194,24 @@ function openQuickAddModal(container, projectId, status, board) {
                 <option value="urgent">🔴 Urgent</option>
               </select>
             </div>
+          </div>
+          <div class="form-row">
             <div class="form-group">
               <label class="form-label">Due Date</label>
               <input type="date" name="due_date" class="form-input"/>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Score</label>
+              <select name="score" class="form-input form-select">
+                <option value="">—</option>
+                <option value="1">1 pt</option>
+                <option value="2">2 pts</option>
+                <option value="3">3 pts</option>
+                <option value="5">5 pts</option>
+                <option value="8">8 pts</option>
+                <option value="13">13 pts</option>
+                <option value="21">21 pts</option>
+              </select>
             </div>
           </div>
           <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px;padding-top:12px;border-top:1px solid #e2e8f0">

@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'vilva/taskspace',
-        'pretty_version' => '1.0.0+no-version-set',
-        'version' => '1.0.0.0',
-        'reference' => null,
+        'pretty_version' => 'dev-main',
+        'version' => 'dev-main',
+        'reference' => '859dcb63870023781fefb711114eb65c302587e9',
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -1482,9 +1482,9 @@
             'dev_requirement' => false,
         ),
         'vilva/taskspace' => array(
-            'pretty_version' => '1.0.0+no-version-set',
-            'version' => '1.0.0.0',
-            'reference' => null,
+            'pretty_version' => 'dev-main',
+            'version' => 'dev-main',
+            'reference' => '859dcb63870023781fefb711114eb65c302587e9',
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

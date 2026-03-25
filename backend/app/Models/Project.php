@@ -14,13 +14,14 @@ class Project extends Model
     protected $fillable = [
         'name', 'description', 'slug', 'color', 'icon',
         'status', 'visibility', 'start_date', 'due_date',
-        'progress', 'owner_id', 'settings',
+        'progress', 'owner_id', 'settings', 'ai_enabled', 'ai_context',
     ];
 
     protected $casts = [
         'start_date' => 'date',
         'due_date'   => 'date',
         'settings'   => 'array',
+        'ai_enabled' => 'boolean',
     ];
 
     protected static function booted(): void
@@ -72,6 +73,16 @@ class Project extends Model
     public function activityLogs()
     {
         return $this->morphMany(ActivityLog::class, 'subject');
+    }
+
+    public function chatChannels()
+    {
+        return $this->hasMany(ChatChannel::class);
+    }
+
+    public function defaultChatChannel()
+    {
+        return $this->hasOne(ChatChannel::class)->where('type', 'project');
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────

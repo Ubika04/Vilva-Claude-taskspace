@@ -42,9 +42,9 @@ class DashboardController extends Controller
     private function getMyTasks(int $userId): array
     {
         return Task::whereHas('assignees', fn($q) => $q->where('users.id', $userId))
-            ->whereIn('status', ['todo', 'in_progress', 'review'])
+            ->whereIn('status', ['todo', 'in_progress', 'working_on', 'review'])
             ->with(['project:id,name,color', 'tags'])
-            ->orderByRaw("FIELD(status, 'in_progress', 'review', 'todo')")
+            ->orderByRaw("CASE status WHEN 'in_progress' THEN 1 WHEN 'review' THEN 2 WHEN 'todo' THEN 3 ELSE 4 END")
             ->orderBy('due_date')
             ->limit(10)
             ->get()
@@ -100,9 +100,11 @@ class DashboardController extends Controller
             ->whereBetween('start_time', [now()->subDays(6)->startOfDay(), now()->endOfDay()])
             ->get()
             ->groupBy(fn($l) => $l->start_time->toDateString())
-            ->each(function ($logs, $date) use (&$week) {
+            ->each(function ($logs, $date) use ($week) {
                 if ($week->has($date)) {
-                    $week[$date]['seconds'] = $logs->sum('duration');
+                    $item = $week->get($date);
+                    $item['seconds'] = $logs->sum('duration');
+                    $week->put($date, $item);
                 }
             });
 
@@ -112,9 +114,11 @@ class DashboardController extends Controller
             ->whereBetween('completed_at', [now()->subDays(6)->startOfDay(), now()->endOfDay()])
             ->get()
             ->groupBy(fn($t) => $t->completed_at->toDateString())
-            ->each(function ($tasks, $date) use (&$week) {
+            ->each(function ($tasks, $date) use ($week) {
                 if ($week->has($date)) {
-                    $week[$date]['tasks_done'] = $tasks->count();
+                    $item = $week->get($date);
+                    $item['tasks_done'] = $tasks->count();
+                    $week->put($date, $item);
                 }
             });
 

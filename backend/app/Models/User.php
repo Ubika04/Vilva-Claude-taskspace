@@ -13,10 +13,13 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable, SoftDeletes;
 
     protected $fillable = [
-        'name', 'email', 'password', 'avatar', 'timezone', 'locale', 'status', 'last_active_at',
+        'name', 'email', 'password', 'avatar', 'timezone', 'locale',
+        'status', 'last_active_at', 'mobile', 'department', 'designation',
     ];
 
     protected $hidden = ['password', 'remember_token'];
+
+    protected $appends = ['avatar_url'];
 
     protected $casts = [
         'email_verified_at' => 'datetime',
@@ -61,6 +64,27 @@ class User extends Authenticatable
         return $this->hasOne(TaskTimeLog::class)->whereIn('status', ['active', 'paused']);
     }
 
+    public function chatChannels()
+    {
+        return $this->belongsToMany(ChatChannel::class, 'chat_channel_members', 'user_id', 'channel_id')
+            ->withPivot('role', 'last_read_at', 'is_muted');
+    }
+
+    public function workSessions()
+    {
+        return $this->hasMany(WorkSession::class);
+    }
+
+    public function activeWorkSession()
+    {
+        return $this->hasOne(WorkSession::class)->whereIn('status', ['active', 'on_break']);
+    }
+
+    public function notificationPreferences()
+    {
+        return $this->hasMany(NotificationPreference::class);
+    }
+
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     public function hasPermission(string $permission): bool
@@ -77,8 +101,13 @@ class User extends Authenticatable
 
     public function getAvatarUrlAttribute(): string
     {
-        return $this->avatar
-            ? \Storage::disk('s3')->url($this->avatar)
-            : 'https://ui-avatars.com/api/?name=' . urlencode($this->name);
+        if ($this->avatar) {
+            try {
+                return \Storage::url($this->avatar);
+            } catch (\Throwable) {
+                // S3 / storage not configured — fall through to generated avatar
+            }
+        }
+        return 'https://ui-avatars.com/api/?name=' . urlencode($this->name) . '&background=6366f1&color=fff&size=64';
     }
 }

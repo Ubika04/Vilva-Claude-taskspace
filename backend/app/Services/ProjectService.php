@@ -13,6 +13,7 @@ class ProjectService
     public function __construct(
         private readonly ProjectRepository $projectRepo,
         private readonly ActivityService   $activityService,
+        private readonly ChatService       $chatService,
     ) {}
 
     public function create(array $data, int $ownerId): Project
@@ -24,14 +25,29 @@ class ProjectService
             ]);
 
             // Auto-add owner as member with "owner" role
-            $ownerRole = Role::where('name', 'owner')->firstOrFail();
+            $ownerRole = Role::firstOrCreate(
+                ['name' => 'owner'],
+                ['display_name' => 'Owner', 'description' => 'Project owner', 'is_system' => true]
+            );
             $project->members()->attach($ownerId, [
                 'role_id'   => $ownerRole->id,
                 'joined_at' => now(),
             ]);
 
+            // Add initial members if provided
+            if (!empty($data['member_ids'])) {
+                foreach ($data['member_ids'] as $memberId) {
+                    if ($memberId != $ownerId) {
+                        $project->members()->attach($memberId, ['role' => 'member']);
+                    }
+                }
+            }
+
             $this->activityService->log('created', $project, auth()->user());
             event(new ProjectCreated($project));
+
+            // Auto-create project chat channel
+            $this->chatService->createProjectChannel($project, $ownerId);
 
             return $project->load('owner', 'members');
         });
@@ -62,13 +78,19 @@ class ProjectService
 
     public function addMember(Project $project, int $userId, string $roleName): void
     {
-        $role = Role::where('name', $roleName)->firstOrFail();
+        $role = Role::firstOrCreate(
+            ['name' => $roleName],
+            ['display_name' => ucfirst($roleName), 'description' => ucfirst($roleName) . ' role', 'is_system' => true]
+        );
 
         $project->members()->syncWithoutDetaching([
             $userId => ['role_id' => $role->id, 'joined_at' => now()],
         ]);
 
         $this->activityService->log('member_added', $project, auth()->user(), ['user_id' => $userId]);
+
+        // Sync chat channel members
+        $this->chatService->syncProjectMembers($project);
     }
 
     public function removeMember(Project $project, int $userId): void
@@ -79,5 +101,8 @@ class ProjectService
 
         $project->members()->detach($userId);
         $this->activityService->log('member_removed', $project, auth()->user(), ['user_id' => $userId]);
+
+        // Sync chat channel members
+        $this->chatService->syncProjectMembers($project);
     }
 }
